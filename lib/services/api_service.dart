@@ -322,7 +322,7 @@ class ApiService {
     final headers = await _getAuthHeaders();
     final queryParameters = {
       'date_filter': dateFilter ?? 'this_month',
-      'payment_filter': paymentFilter ?? 'all',
+      'payment_filter': paymentFilter ?? 'Total',
     };
 
     final url = Uri.parse('$_baseUrl/api/analytics/').replace(queryParameters: queryParameters);
@@ -339,22 +339,17 @@ class ApiService {
 
       if (response.statusCode == 200) {
         try {
-          final jsonData = json.decode(response.body);
-          print('[v0] Analytics API Response: totalRevenue=${jsonData['key_metrics']?['total_revenue']}, totalOrders=${jsonData['key_metrics']?['total_orders']}');
-          return AnalyticsData.fromJson(jsonData);
+          return AnalyticsData.fromJson(json.decode(response.body));
         } catch (e) {
-          print('[v0] Error parsing analytics data: $e');
           throw Exception('Received invalid analytics data format from server.');
         }
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         await logout();
         throw Exception('Session expired. Please log in again.');
       } else {
-        print('[v0] Analytics API Error Status: ${response.statusCode}');
         throw Exception('Failed to load analytics data. Server error occurred.');
       }
     } catch (e) {
-      print('[v0] Analytics API Exception: $e');
       rethrow;
     }
   }

@@ -52,7 +52,7 @@ class PendingOrder {
         customerMobile: json["customer_mobile"] ?? 'N/A',
         items: itemsList,
         totalPrice: (json["total_price"] ?? 0.0).toDouble(),
-        status: json["status"] ?? json["order_status"] ?? 'Unknown',
+        status: json["order_status"] ?? json["status"] ?? 'Unknown',
         paymentMethod: json["payment_method"] ?? 'N/A',
         createdAt: json["created_at"] ?? DateTime.now().toIso8601String(),
         orderPlacedBy: json["order_placed_by"],

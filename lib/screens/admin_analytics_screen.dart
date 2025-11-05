@@ -54,7 +54,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   Future<AnalyticsData>? _analyticsData;
   String _selectedFilter = 'this_month';
   DateTimeRange? _customDateRange;
-  String _paymentFilter = 'all'; // 'all', 'cash', 'online'
+  String _paymentFilter = 'Total'; // 'all', 'cash', 'online'
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -266,13 +266,13 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: ToggleButtons(
         isSelected: [
-          _paymentFilter == 'all',
+          _paymentFilter == 'Total',
           _paymentFilter == 'cash',
           _paymentFilter == 'online'
         ],
         onPressed: (index) {
           setState(() {
-            _paymentFilter = ['all', 'cash', 'online'][index];
+            _paymentFilter = ['Total', 'cash', 'online'][index];
             _loadAnalyticsData();
           });
         },
@@ -576,28 +576,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
 
   Widget _buildMostOrderedBarChart(ChartData chartData, bool isDark) {
     final axisColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
-    
-    if (chartData.labels.isEmpty || chartData.data.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.info_outline, 
-              size: 48, 
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'No data available',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    
     final List<_MostOrderedData> chartDataList = List.generate(
       chartData.labels.length,
       (i) => _MostOrderedData(chartData.labels[i], chartData.data[i]),
@@ -668,7 +646,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
     }
 
     final total = chartData.data.reduce((a, b) => a + b);
-    
+
     final pieData = chartData.data.asMap().entries.map((e) {
       final i = e.key;
       final v = e.value;
@@ -701,7 +679,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
             ),
             builder: (dynamic data, dynamic point, dynamic series,
                 int pointIndex, int seriesIndex) {
-              final pct = total > 0 ? ((data as _PieChartData).value / total) * 100 : 0;
+              final pct =
+                  total > 0 ? ((data as _PieChartData).value / total) * 100 : 0;
               return Text('${pct.toStringAsFixed(0)}%');
             },
           ),

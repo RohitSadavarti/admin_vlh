@@ -24,19 +24,26 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
   final ApiService _apiService = ApiService.instance;
   late TabController _tabController;
   late Timer _timer;
-  final TextEditingController _searchController = TextEditingController();
 
-  // Separate lists for all and filtered orders
+  // --- State for Online Orders ---
+  final TextEditingController _onlineSearchController = TextEditingController();
   List<PendingOrder> _allOnlineOrders = [];
+  List<PendingOrder> _filteredOnlineOrders = [];
+  String _onlineSelectedFilter = 'this_year';
+  DateTimeRange? _onlineCustomDateRange;
+  String _onlineSearchQuery = '';
+
+  // --- State for Counter Orders ---
+  final TextEditingController _counterSearchController =
+      TextEditingController();
   List<PendingOrder> _allCounterOrders = [];
   List<PendingOrder> _filteredCounterOrders = [];
+  String _counterSelectedFilter = 'this_year';
+  DateTimeRange? _counterCustomDateRange;
+  String _counterSearchQuery = '';
 
   bool _isLoading = true;
   String? _errorMessage;
-
-  String _selectedFilter = 'this_year';
-  DateTimeRange? _customDateRange;
-  String _searchQuery = '';
 
   @override
   void initState() {
@@ -48,25 +55,37 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         setState(() {}); // Rebuild every second to update timers
       }
     });
-    _searchController.addListener(_onSearchChanged);
+    _onlineSearchController.addListener(_onOnlineSearchChanged);
+    _counterSearchController.addListener(_onCounterSearchChanged);
   }
 
   @override
   void dispose() {
     _timer.cancel();
     _tabController.dispose();
-    _searchController.removeListener(_onSearchChanged);
-    _searchController.dispose();
+    _onlineSearchController.removeListener(_onOnlineSearchChanged);
+    _onlineSearchController.dispose();
+    _counterSearchController.removeListener(_onCounterSearchChanged);
+    _counterSearchController.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged() {
+  // Listeners now call setState directly
+  void _onOnlineSearchChanged() {
     setState(() {
-      _searchQuery = _searchController.text.toLowerCase();
-      _applyCounterOrdersFilter();
+      _onlineSearchQuery = _onlineSearchController.text.toLowerCase();
+      _applyOnlineFilter(); // Apply filter within setState
     });
   }
 
+  void _onCounterSearchChanged() {
+    setState(() {
+      _counterSearchQuery = _counterSearchController.text.toLowerCase();
+      _applyCounterFilter(); // Apply filter within setState
+    });
+  }
+
+  // This function now calls setState only ONCE at the end
   Future<void> _loadOrders() async {
     if (!mounted) return;
     setState(() {
@@ -74,23 +93,29 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
       _errorMessage = null;
     });
     try {
-      final allOrders = await _apiService.fetchOrders(dateFilter: _selectedFilter);
+      // Fetch a broad set of data (e.g., 'this_year').
+      final allOrders = await _apiService.fetchOrders(dateFilter: 'this_year');
       if (!mounted) return;
 
-      setState(() {
-        // Online orders (customer) - no date filter, show all
-        _allOnlineOrders = allOrders
-            .where((o) => o.orderPlacedBy?.toLowerCase() == 'customer')
-            .toList();
+      // Set the base lists
+      _allOnlineOrders = allOrders
+          .where((o) => o.orderPlacedBy?.toLowerCase() == 'customer')
+          .toList();
 
-        // Counter orders - apply date filter
-        _allCounterOrders = allOrders
-            .where((o) => o.orderPlacedBy?.toLowerCase() == 'counter')
-            .toList();
+      _allCounterOrders = allOrders
+          .where((o) => o.orderPlacedBy?.toLowerCase() == 'counter')
+          .toList();
 
-        _applyCounterOrdersFilter();
-        _isLoading = false;
-      });
+      // Run the filter logic *before* setState
+      _applyOnlineFilter();
+      _applyCounterFilter();
+
+      // Call setState ONCE with the final state
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -101,12 +126,13 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     }
   }
 
-  void _applyCounterOrdersFilter() {
+  // This function does NOT call setState
+  void _applyOnlineFilter() {
     DateTime now = DateTime.now();
     DateTime startDate;
     DateTime endDate;
 
-    switch (_selectedFilter) {
+    switch (_onlineSelectedFilter) {
       case 'today':
         startDate = DateTime(now.year, now.month, now.day);
         endDate = startDate.add(const Duration(days: 1));
@@ -125,9 +151,72 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         endDate = DateTime(now.year + 1, 1, 1);
         break;
       case 'custom':
-        if (_customDateRange != null) {
-          startDate = _customDateRange!.start;
-          endDate = _customDateRange!.end.add(const Duration(days: 1));
+        if (_onlineCustomDateRange != null) {
+          startDate = _onlineCustomDateRange!.start;
+          endDate = _onlineCustomDateRange!.end.add(const Duration(days: 1));
+        } else {
+          _filteredOnlineOrders = _allOnlineOrders;
+          return;
+        }
+        break;
+      default:
+        startDate = DateTime(now.year, 1, 1);
+        endDate = DateTime(now.year + 1, 1, 1);
+        break;
+    }
+
+    _filteredOnlineOrders = _allOnlineOrders.where((order) {
+      try {
+        final orderDate = DateTime.parse(order.createdAt).toLocal();
+        final matchesDate =
+            !orderDate.isBefore(startDate) && orderDate.isBefore(endDate);
+
+        if (!matchesDate) return false;
+
+        // Apply search filter
+        if (_onlineSearchQuery.isEmpty) {
+          return true; // Already matches date
+        }
+
+        return order.orderId.toLowerCase().contains(_onlineSearchQuery) ||
+            order.customerName.toLowerCase().contains(_onlineSearchQuery) ||
+            order.customerMobile.contains(_onlineSearchQuery) ||
+            order.items.any(
+                (item) => item.name.toLowerCase().contains(_onlineSearchQuery));
+      } catch (e) {
+        return false;
+      }
+    }).toList();
+  }
+
+  // This function does NOT call setState
+  void _applyCounterFilter() {
+    DateTime now = DateTime.now();
+    DateTime startDate;
+    DateTime endDate;
+
+    switch (_counterSelectedFilter) {
+      case 'today':
+        startDate = DateTime(now.year, now.month, now.day);
+        endDate = startDate.add(const Duration(days: 1));
+        break;
+      case 'this_week':
+        startDate = now.subtract(Duration(days: now.weekday - 1));
+        startDate = DateTime(startDate.year, startDate.month, startDate.day);
+        endDate = startDate.add(const Duration(days: 7));
+        break;
+      case 'this_month':
+        startDate = DateTime(now.year, now.month, 1);
+        endDate = DateTime(now.year, now.month + 1, 1);
+        break;
+      case 'this_year':
+        startDate = DateTime(now.year, 1, 1);
+        endDate = DateTime(now.year + 1, 1, 1);
+        break;
+      case 'custom':
+        if (_counterCustomDateRange != null) {
+          startDate = _counterCustomDateRange!.start;
+          endDate = _counterCustomDateRange!.end.add(const Duration(days: 1));
         } else {
           _filteredCounterOrders = _allCounterOrders;
           return;
@@ -139,45 +228,45 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         break;
     }
 
-    setState(() {
-      _filteredCounterOrders = _allCounterOrders.where((order) {
-        try {
-          final orderDate = DateTime.parse(order.createdAt);
-          final matchesDate =
-              !orderDate.isBefore(startDate) && orderDate.isBefore(endDate);
+    _filteredCounterOrders = _allCounterOrders.where((order) {
+      try {
+        final orderDate = DateTime.parse(order.createdAt).toLocal();
+        final matchesDate =
+            !orderDate.isBefore(startDate) && orderDate.isBefore(endDate);
 
-          // Apply search filter
-          if (_searchQuery.isEmpty) {
-            return matchesDate;
-          }
+        if (!matchesDate) return false;
 
-          final matchesSearch =
-              order.orderId.toLowerCase().contains(_searchQuery) ||
-                  order.customerName.toLowerCase().contains(_searchQuery) ||
-                  order.customerMobile.contains(_searchQuery) ||
-                  order.items.any(
-                      (item) => item.name.toLowerCase().contains(_searchQuery));
-
-          return matchesDate && matchesSearch;
-        } catch (e) {
-          return false;
+        // Apply search filter
+        if (_counterSearchQuery.isEmpty) {
+          return true; // Already matches date
         }
-      }).toList();
-    });
+
+        return order.orderId.toLowerCase().contains(_counterSearchQuery) ||
+            order.customerName.toLowerCase().contains(_counterSearchQuery) ||
+            order.customerMobile.contains(_counterSearchQuery) ||
+            order.items.any((item) =>
+                item.name.toLowerCase().contains(_counterSearchQuery));
+      } catch (e) {
+        return false;
+      }
+    }).toList();
   }
 
-  void _onOrderAction(int orderDbId, String action) async {
+  Future<void> _onOrderAction(int orderDbId, String action) async {
     try {
-      final success = await _apiService.updateOrderStatus(orderDbId, action);
+      // Correctly awaits a bool
+      final bool success =
+          await _apiService.updateOrderStatus(orderDbId, action);
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Order status updated successfully'),
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-      ));
-
       if (success) {
-        await _loadOrders();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Order status updated successfully'),
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+        ));
+        await _loadOrders(); // Refresh all data
+      } else {
+        throw Exception('Failed to update order status');
       }
     } catch (e) {
       if (!mounted) return;
@@ -233,8 +322,9 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     return Icons.error_outline_rounded;
   }
 
-  String _getFilterDisplayText() {
-    switch (_selectedFilter) {
+  // Display text for Online Filter
+  String _getOnlineFilterDisplayText() {
+    switch (_onlineSelectedFilter) {
       case 'today':
         return 'Today';
       case 'this_week':
@@ -244,9 +334,9 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
       case 'this_year':
         return 'This Year';
       case 'custom':
-        if (_customDateRange != null) {
+        if (_onlineCustomDateRange != null) {
           final formatter = DateFormat('MMM dd');
-          return '${formatter.format(_customDateRange!.start)} - ${formatter.format(_customDateRange!.end)}';
+          return '${formatter.format(_onlineCustomDateRange!.start)} - ${formatter.format(_onlineCustomDateRange!.end)}';
         }
         return 'Custom Range';
       default:
@@ -254,48 +344,83 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     }
   }
 
-  void _showCustomDatePicker() async {
+  // Display text for Counter Filter
+  String _getCounterFilterDisplayText() {
+    switch (_counterSelectedFilter) {
+      case 'today':
+        return 'Today';
+      case 'this_week':
+        return 'This Week';
+      case 'this_month':
+        return 'This Month';
+      case 'this_year':
+        return 'This Year';
+      case 'custom':
+        if (_counterCustomDateRange != null) {
+          final formatter = DateFormat('MMM dd');
+          return '${formatter.format(_counterCustomDateRange!.start)} - ${formatter.format(_counterCustomDateRange!.end)}';
+        }
+        return 'Custom Range';
+      default:
+        return 'This Year';
+    }
+  }
+
+  // Date picker for Online Filter (calls setState)
+  void _showOnlineCustomDatePicker() async {
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      initialDateRange: _customDateRange,
+      initialDateRange: _onlineCustomDateRange,
     );
     if (picked != null) {
       setState(() {
-        _customDateRange = picked;
-        _selectedFilter = 'custom';
-        _applyCounterOrdersFilter();
+        _onlineCustomDateRange = picked;
+        _onlineSelectedFilter = 'custom';
+        _applyOnlineFilter(); // Apply online filter
+      });
+    }
+  }
+
+  // Date picker for Counter Filter (calls setState)
+  void _showCounterCustomDatePicker() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _counterCustomDateRange,
+    );
+    if (picked != null) {
+      setState(() {
+        _counterCustomDateRange = picked;
+        _counterSelectedFilter = 'custom';
+        _applyCounterFilter(); // Apply counter filter
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    //
-    // --- START: MODIFIED AS PER REQUIREMENTS ---
-    //
-    // Split online orders by status based on new requirements
-    final preparingOrders = _allOnlineOrders
+    // Split *filtered* online orders by status
+    final preparingOrders = _filteredOnlineOrders
         .where(
             (o) => o.status.toLowerCase() == 'open') // Requirement: 'open' only
         .toList();
 
-    final readyOrders = _allOnlineOrders
+    final readyOrders = _filteredOnlineOrders
         .where((o) =>
             o.status.toLowerCase() == 'ready') // Requirement: 'ready' only
         .toList();
 
-    final pickedUpOrders = _allOnlineOrders
+    final pickedUpOrders = _filteredOnlineOrders
         .where((o) =>
             o.status.toLowerCase() ==
             'pickedup') // Requirement: 'pickedup' only
         .toList();
-    //
-    // --- END: MODIFIED AS PER REQUIREMENTS ---
-    //
 
-    final onlineOrderCount = preparingOrders.length + readyOrders.length;
+    // Use the count of *filtered* orders for the tab
+    final onlineOrderCount = _filteredOnlineOrders.length;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -329,17 +454,13 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
             ),
           )
         ],
-        body: _buildBody(preparingOrders, readyOrders, pickedUpOrders,
-            _filteredCounterOrders),
+        body: _buildBody(preparingOrders, readyOrders, pickedUpOrders),
       ),
     );
   }
 
-  Widget _buildBody(
-      List<PendingOrder> preparingOrders,
-      List<PendingOrder> readyOrders,
-      List<PendingOrder> pickedUpOrders,
-      List<PendingOrder> counterOrders) {
+  Widget _buildBody(List<PendingOrder> preparingOrders,
+      List<PendingOrder> readyOrders, List<PendingOrder> pickedUpOrders) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_errorMessage != null) {
       return Center(
@@ -375,32 +496,150 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
       ),
       RefreshIndicator(
         onRefresh: _loadOrders,
-        child: _buildCounterOrdersView(counterOrders),
+        child: _buildCounterOrdersView(_filteredCounterOrders), // Pass filtered
       ),
     ]);
   }
 
+  // Build Online Orders View with Filters
   Widget _buildOnlineOrdersView(List<PendingOrder> preparingOrders,
       List<PendingOrder> readyOrders, List<PendingOrder> pickedUpOrders) {
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 900)
-        return _buildOnlineOrdersTabView(
-            preparingOrders, readyOrders, pickedUpOrders);
-      return _buildOnlineOrdersRowLayout(
-          preparingOrders, readyOrders, pickedUpOrders);
-    });
+    return Column(
+      children: [
+        // Search Bar and Date Filter for Online Orders
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            children: [
+              // Search Bar
+              TextField(
+                controller: _onlineSearchController,
+                decoration: InputDecoration(
+                  hintText: 'Search by order ID, name, phone, or item...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _onlineSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _onlineSearchController.clear();
+                            // Manually trigger the listener logic
+                            _onOnlineSearchChanged();
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Date Filter
+              Row(
+                children: [
+                  Expanded(
+                    child: PopupMenuButton<String>(
+                      // Popup now calls setState
+                      onSelected: (value) {
+                        if (value == 'custom') {
+                          _showOnlineCustomDatePicker();
+                        } else {
+                          setState(() {
+                            _onlineSelectedFilter = value;
+                            _applyOnlineFilter();
+                          });
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                            value: 'today', child: Text('Today')),
+                        const PopupMenuItem(
+                            value: 'this_week', child: Text('This Week')),
+                        const PopupMenuItem(
+                            value: 'this_month', child: Text('This Month')),
+                        const PopupMenuItem(
+                            value: 'this_year', child: Text('This Year')),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem(
+                            value: 'custom', child: Text('Custom Range')),
+                      ],
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          border:
+                              Border.all(color: Theme.of(context).dividerColor),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today_outlined,
+                                    size: 18),
+                                const SizedBox(width: 8),
+                                Text(_getOnlineFilterDisplayText()),
+                              ],
+                            ),
+                            const Icon(Icons.arrow_drop_down),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // End of Filters
+        Expanded(
+          child: LayoutBuilder(builder: (context, constraints) {
+            if (_filteredOnlineOrders.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.search_off,
+                        size: 64,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withOpacity(0.3)),
+                    const SizedBox(height: 16),
+                    Text(
+                      _onlineSearchQuery.isNotEmpty
+                          ? 'No online orders match your search'
+                          : 'No online orders found for this period',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+            if (constraints.maxWidth < 900) {
+              return _buildOnlineOrdersTabView(
+                  preparingOrders, readyOrders, pickedUpOrders);
+            }
+            return _buildOnlineOrdersRowLayout(
+                preparingOrders, readyOrders, pickedUpOrders);
+          }),
+        ),
+      ],
+    );
   }
 
   Widget _buildOnlineOrdersRowLayout(List<PendingOrder> preparingOrders,
       List<PendingOrder> readyOrders, List<PendingOrder> pickedUpOrders) {
     return Padding(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(
             child: _buildOrderColumn(
                 title: 'Preparing',
                 orders: preparingOrders,
-                status: 'preparing')), // 'preparing' status for color/icon
+                status: 'preparing')),
         const SizedBox(width: 12),
         Expanded(
             child: _buildOrderColumn(
@@ -408,17 +647,11 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                 orders: readyOrders,
                 status: 'ready')),
         const SizedBox(width: 12),
-        //
-        // --- START: MODIFIED AS PER REQUIREMENTS ---
-        //
         Expanded(
             child: _buildOrderColumn(
-                title: 'Picked Up', // Changed title
+                title: 'Picked Up',
                 orders: pickedUpOrders,
-                status: 'pickedup')), // Changed status for color/icon
-        //
-        // --- END: MODIFIED AS PER REQUIREMENTS ---
-        //
+                status: 'pickedup')),
       ]),
     );
   }
@@ -434,15 +667,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
             tabs: [
               Tab(text: 'Preparing (${preparingOrders.length})'),
               Tab(text: 'Ready (${readyOrders.length})'),
-              //
-              // --- START: MODIFIED AS PER REQUIREMENTS ---
-              //
-              Tab(
-                  text:
-                      'Picked Up (${pickedUpOrders.length})'), // Changed title
-              //
-              // --- END: MODIFIED AS PER REQUIREMENTS ---
-              //
+              Tab(text: 'Picked Up (${pickedUpOrders.length})'),
             ]),
         Expanded(
             child: TabBarView(children: [
@@ -614,7 +839,6 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     final List<Widget> buttons = [];
 
     if (isOnline) {
-      // Use 'open' as the only preparing state, as per requirements
       if (status == 'open') {
         buttons.add(ElevatedButton.icon(
             icon: const Icon(Icons.check_circle_outline),
@@ -628,7 +852,6 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
       }
     }
 
-    // Allow viewing invoice for any order that is not in 'open' state
     if (status != 'open') {
       buttons.add(const SizedBox(width: 8));
       buttons.add(TextButton(
@@ -647,15 +870,17 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
             children: [
               // Search Bar
               TextField(
-                controller: _searchController,
+                controller: _counterSearchController,
                 decoration: InputDecoration(
                   hintText: 'Search by order ID, name, phone, or item...',
                   prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchQuery.isNotEmpty
+                  suffixIcon: _counterSearchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear),
                           onPressed: () {
-                            _searchController.clear();
+                            _counterSearchController.clear();
+                            // Manually trigger the listener logic
+                            _onCounterSearchChanged();
                           },
                         )
                       : null,
@@ -670,13 +895,14 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                 children: [
                   Expanded(
                     child: PopupMenuButton<String>(
+                      // Popup now calls setState
                       onSelected: (value) {
                         if (value == 'custom') {
-                          _showCustomDatePicker();
+                          _showCounterCustomDatePicker();
                         } else {
                           setState(() {
-                            _selectedFilter = value;
-                            _loadOrders();
+                            _counterSelectedFilter = value;
+                            _applyCounterFilter();
                           });
                         }
                       },
@@ -709,7 +935,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                                 const Icon(Icons.calendar_today_outlined,
                                     size: 18),
                                 const SizedBox(width: 8),
-                                Text(_getFilterDisplayText()),
+                                Text(_getCounterFilterDisplayText()),
                               ],
                             ),
                             const Icon(Icons.arrow_drop_down),
@@ -738,10 +964,11 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                               .withOpacity(0.3)),
                       const SizedBox(height: 16),
                       Text(
-                        _searchQuery.isNotEmpty
+                        _counterSearchQuery.isNotEmpty
                             ? 'No orders match your search'
-                            : 'No counter orders found',
+                            : 'No counter orders found for this period',
                         style: Theme.of(context).textTheme.bodyLarge,
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -779,6 +1006,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                 child: Row(children: [
                   Text('${item.quantity}x',
                       style: textTheme.bodySmall?.copyWith(
+                          // This is the corrected line
                           color: theme.colorScheme.onSurface.withOpacity(0.6))),
                   const SizedBox(width: 8),
                   Expanded(child: Text(item.name, style: textTheme.bodyMedium)),
