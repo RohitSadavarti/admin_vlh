@@ -1,4 +1,4 @@
-// lib/screens/admin_dashboard_screen.dart
+// lib/screens/admin_dashboard_screen.dart - IMPROVED VERSION
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -16,6 +16,8 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final ApiService _apiService = ApiService.instance;
   Future<AnalyticsData>? _analyticsDataFuture;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -25,8 +27,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   void _loadData() {
     setState(() {
-      _analyticsDataFuture = _apiService.getAnalyticsData('this_month');
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    // Add delay and error handling
+    _analyticsDataFuture = _apiService
+        .getAnalyticsData('this_month')
+        .timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            throw Exception('Request timed out. Please check your internet connection.');
+          },
+        )
+        .then((data) {
+          print('✅ Analytics data loaded successfully');
+          setState(() => _isLoading = false);
+          return data;
+        })
+        .catchError((error) {
+          print('❌ Error loading analytics: $error');
+          setState(() {
+            _isLoading = false;
+            _errorMessage = error.toString();
+          });
+          throw error;
+        });
   }
 
   @override
@@ -44,49 +70,98 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ],
       ),
       drawer: const AppDrawer(),
-      body: FutureBuilder<AnalyticsData>(
-        future: _analyticsDataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline,
-                        size: 48, color: Theme.of(context).colorScheme.error),
-                    const SizedBox(height: 16),
-                    Text('Failed to load dashboard data',
-                        style: Theme.of(context).textTheme.headlineSmall),
-                    const SizedBox(height: 8),
-                    Text('${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: _loadData,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                  ],
-                ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              'Loading dashboard...',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline,
+                  size: 64, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 16),
+              Text('Failed to load dashboard',
+                  style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
-            );
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: Text('No data found.'));
-          }
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: _loadData,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-          final data = snapshot.data!;
-          final metrics = data.keyMetrics;
+    return FutureBuilder<AnalyticsData>(
+      future: _analyticsDataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          return _buildDashboardGrid(context, metrics);
-        },
-      ),
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline,
+                      size: 48, color: Theme.of(context).colorScheme.error),
+                  const SizedBox(height: 16),
+                  Text('Error: ${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: _loadData,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: Text('No data available.'));
+        }
+
+        final data = snapshot.data!;
+        final metrics = data.keyMetrics;
+
+        return _buildDashboardGrid(context, metrics);
+      },
     );
   }
 
@@ -147,28 +222,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               : 1;
       final childAspectRatio = crossAxisCount == 1 ? 4.0 : 2.0;
 
-      return GridView.builder(
-        padding: const EdgeInsets.all(16.0),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: childAspectRatio,
+      return RefreshIndicator(
+        onRefresh: () async => _loadData(),
+        child: GridView.builder(
+          padding: const EdgeInsets.all(16.0),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: childAspectRatio,
+          ),
+          itemCount: dashboardItems.length,
+          itemBuilder: (context, index) {
+            final item = dashboardItems[index];
+            return _buildDashboardItem(
+              context,
+              icon: item['icon'],
+              title: item['title'],
+              value: item['value'],
+              color: item['color'],
+              onTap: () {
+                Navigator.pushNamed(context, item['route']);
+              },
+            );
+          },
         ),
-        itemCount: dashboardItems.length,
-        itemBuilder: (context, index) {
-          final item = dashboardItems[index];
-          return _buildDashboardItem(
-            context,
-            icon: item['icon'],
-            title: item['title'],
-            value: item['value'],
-            color: item['color'],
-            onTap: () {
-              Navigator.pushNamed(context, item['route']);
-            },
-          );
-        },
       );
     });
   }
@@ -186,6 +264,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     return Card(
       clipBehavior: Clip.antiAlias,
+      elevation: 2,
       child: InkWell(
         onTap: onTap,
         child: Padding(
