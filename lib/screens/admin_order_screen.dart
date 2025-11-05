@@ -166,7 +166,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     });
   }
 
-  Future<void> _onOrderAction(int orderDbId, String action) async {
+  void _onOrderAction(int orderDbId, String action) async {
     try {
       final success = await _apiService.updateOrderStatus(orderDbId, action);
       if (!mounted) return;
@@ -176,7 +176,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         backgroundColor: Theme.of(context).colorScheme.secondary,
       ));
 
-      if (success['success']) {
+      if (success) {
         await _loadOrders();
       }
     } catch (e) {

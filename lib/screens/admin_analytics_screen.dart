@@ -1,5 +1,4 @@
 // lib/screens/admin_analytics_screen.dart
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
@@ -32,6 +31,13 @@ class _OrdersByHourData {
   _OrdersByHourData(this.hour, this.count);
   final String hour;
   final double count;
+}
+
+class _PieChartData {
+  _PieChartData(this.label, this.value, this.color);
+  final String label;
+  final double value;
+  final Color color;
 }
 // --- END HELPER CLASSES ---
 
@@ -289,7 +295,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   }
 
   String _getFilterDisplayText() {
-    // ... (This function remains the same)
     switch (_selectedFilter) {
       case 'today':
         return 'Today';
@@ -311,7 +316,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   }
 
   void _showCustomDatePicker() async {
-    // ... (This function remains mostly the same, but uses theme)
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
@@ -391,7 +395,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   }
 
   String _formatNumber(double number) {
-    // ... (This function remains the same)
     if (number >= 10000000) {
       return '${(number / 10000000).toStringAsFixed(2)}Cr';
     } else if (number >= 100000) {
@@ -573,6 +576,28 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
 
   Widget _buildMostOrderedBarChart(ChartData chartData, bool isDark) {
     final axisColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+    
+    if (chartData.labels.isEmpty || chartData.data.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.info_outline, 
+              size: 48, 
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No data available',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
     final List<_MostOrderedData> chartDataList = List.generate(
       chartData.labels.length,
       (i) => _MostOrderedData(chartData.labels[i], chartData.data[i]),
@@ -603,7 +628,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
         majorTickLines: const MajorTickLines(width: 0),
         maximum: maxValue * 1.25,
       ),
-      tooltipBehavior: _mostOrderedTooltipBehavior,
+      tooltipBehavior: TooltipBehavior(enable: true),
       series: <CartesianSeries>[
         BarSeries<_MostOrderedData, String>(
           name: 'Orders',
@@ -630,7 +655,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   }
 
   Widget _buildPieChart(ChartData chartData, bool isDark) {
-    // ... (This function needs updating to the new style)
     final colors = [
       Theme.of(context).colorScheme.primary,
       Theme.of(context).colorScheme.secondary,
@@ -644,47 +668,43 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
     }
 
     final total = chartData.data.reduce((a, b) => a + b);
+    
+    final pieData = chartData.data.asMap().entries.map((e) {
+      final i = e.key;
+      final v = e.value;
+      return _PieChartData(chartData.labels[i], v, colors[i % colors.length]);
+    }).toList();
 
-    return Column(
-      children: [
-        Expanded(
-          child: PieChart(
-            PieChartData(
-              sections: chartData.data.asMap().entries.map((e) {
-                final i = e.key;
-                final v = e.value;
-                final pct = total > 0 ? (v / total) * 100 : 0;
-                return PieChartSectionData(
-                  color: colors[i % colors.length],
-                  value: v,
-                  title: '${pct.toStringAsFixed(0)}%',
-                  radius: 70,
-                  titleStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                );
-              }).toList(),
-              sectionsSpace: 4,
-              centerSpaceRadius: 40,
-            ),
-          ),
+    return SfCircularChart(
+      legend: Legend(
+        isVisible: true,
+        position: LegendPosition.bottom,
+        textStyle: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface,
+          fontSize: 12,
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: chartData.labels.asMap().entries.map((entry) {
-            final i = entry.key;
-            final label = entry.value;
-            final v = chartData.data[i];
-            return _buildLegendItem(
-              colors[i % colors.length],
-              '$label (${v.toStringAsFixed(0)})',
-              isDark,
-            );
-          }).toList(),
+      ),
+      tooltipBehavior: TooltipBehavior(enable: true),
+      series: <CircularSeries>[
+        PieSeries<_PieChartData, String>(
+          dataSource: pieData,
+          xValueMapper: (_PieChartData data, _) => data.label,
+          yValueMapper: (_PieChartData data, _) => data.value,
+          pointColorMapper: (_PieChartData data, _) => data.color,
+          dataLabelSettings: DataLabelSettings(
+            isVisible: true,
+            labelPosition: ChartDataLabelPosition.outside,
+            textStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+            builder: (dynamic data, dynamic point, dynamic series,
+                int pointIndex, int seriesIndex) {
+              final pct = total > 0 ? ((data as _PieChartData).value / total) * 100 : 0;
+              return Text('${pct.toStringAsFixed(0)}%');
+            },
+          ),
         ),
       ],
     );
@@ -718,7 +738,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
         majorTickLines: const MajorTickLines(width: 0),
         maximum: maxValue * 1.4,
       ),
-      tooltipBehavior: _ordersByHourTooltipBehavior,
+      tooltipBehavior: TooltipBehavior(enable: true),
       series: <CartesianSeries>[
         SplineAreaSeries<_OrdersByHourData, String>(
           name: 'Orders',
@@ -807,7 +827,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           majorGridLines: const MajorGridLines(width: 0),
         )
       ],
-      tooltipBehavior: _revenueTooltipBehavior,
+      tooltipBehavior: TooltipBehavior(enable: true),
       series: <CartesianSeries>[
         ColumnSeries<_RevenueOrdersData, String>(
           name: 'Revenue (₹)',
@@ -891,7 +911,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           color: Theme.of(context).dividerColor.withOpacity(0.1),
         ),
       ),
-      tooltipBehavior: _top5TooltipBehavior,
+      tooltipBehavior: TooltipBehavior(enable: true),
       series: seriesList,
     );
   }

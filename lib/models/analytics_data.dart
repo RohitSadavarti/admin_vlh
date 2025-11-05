@@ -39,6 +39,14 @@ class AnalyticsData {
         tableData: [],
       );
     }
+    
+    print('[v0] Full Analytics JSON: $json');
+    print('[v0] mostOrderedItems: ${json['most_ordered_items']}');
+    print('[v0] paymentMethodDist: ${json['payment_method_distribution']}');
+    print('[v0] ordersByHour: ${json['orders_by_hour']}');
+    print('[v0] dayWiseRevenue: ${json['day_wise_revenue']}');
+    print('[v0] dayWiseMenu: ${json['day_wise_menu']}');
+    
     return AnalyticsData(
       keyMetrics: KeyMetrics.fromJson(json['key_metrics']),
       mostOrderedItems: ChartData.fromJson(json['most_ordered_items']),
@@ -96,14 +104,29 @@ class ChartData {
     if (json == null) {
       return ChartData(labels: [], data: []);
     }
-    return ChartData(
-      labels: json['labels'] != null
-          ? List<String>.from(json['labels'].map((e) => e.toString()))
-          : [],
-      data: json['data'] != null
-          ? List<num>.from(json['data']).map((n) => n.toDouble()).toList()
-          : [],
-    );
+    
+    List<String> labels = [];
+    List<double> data = [];
+    
+    // Try different key patterns for labels
+    if (json['labels'] != null && json['labels'] is List) {
+      labels = List<String>.from(json['labels'].map((e) => e.toString()));
+    } else if (json['x_labels'] != null && json['x_labels'] is List) {
+      labels = List<String>.from(json['x_labels'].map((e) => e.toString()));
+    }
+    
+    // Try different key patterns for data
+    if (json['data'] != null && json['data'] is List) {
+      data = List<num>.from(json['data']).map((n) => n.toDouble()).toList();
+    } else if (json['values'] != null && json['values'] is List) {
+      data = List<num>.from(json['values']).map((n) => n.toDouble()).toList();
+    } else if (json['counts'] != null && json['counts'] is List) {
+      data = List<num>.from(json['counts']).map((n) => n.toDouble()).toList();
+    }
+    
+    print('[v0] ChartData parsed - labels: ${labels.length}, data: ${data.length}');
+    
+    return ChartData(labels: labels, data: data);
   }
 }
 
@@ -122,21 +145,38 @@ class DayWiseRevenue {
     if (json == null) {
       return DayWiseRevenue(labels: [], revenueData: [], ordersData: []);
     }
-    return DayWiseRevenue(
-      labels: json['labels'] != null
-          ? List<String>.from(json['labels'].map((e) => e.toString()))
-          : [],
-      revenueData: json['revenue_data'] != null
-          ? List<num>.from(json['revenue_data'])
-              .map((n) => n.toDouble())
-              .toList()
-          : [],
-      ordersData: json['orders_data'] != null
-          ? List<num>.from(json['orders_data'])
-              .map((n) => n.toDouble())
-              .toList()
-          : [],
-    );
+    
+    List<String> labels = [];
+    List<double> revenueData = [];
+    List<double> ordersData = [];
+    
+    if (json['labels'] != null && json['labels'] is List) {
+      labels = List<String>.from(json['labels'].map((e) => e.toString()));
+    }
+    
+    if (json['revenue_data'] != null && json['revenue_data'] is List) {
+      revenueData = List<num>.from(json['revenue_data'])
+          .map((n) => n.toDouble())
+          .toList();
+    } else if (json['revenue'] != null && json['revenue'] is List) {
+      revenueData = List<num>.from(json['revenue'])
+          .map((n) => n.toDouble())
+          .toList();
+    }
+    
+    if (json['orders_data'] != null && json['orders_data'] is List) {
+      ordersData = List<num>.from(json['orders_data'])
+          .map((n) => n.toDouble())
+          .toList();
+    } else if (json['orders'] != null && json['orders'] is List) {
+      ordersData = List<num>.from(json['orders'])
+          .map((n) => n.toDouble())
+          .toList();
+    }
+    
+    print('[v0] DayWiseRevenue parsed - labels: ${labels.length}, revenue: ${revenueData.length}, orders: ${ordersData.length}');
+    
+    return DayWiseRevenue(labels: labels, revenueData: revenueData, ordersData: ordersData);
   }
 }
 
@@ -150,16 +190,23 @@ class DayWiseMenu {
     if (json == null) {
       return DayWiseMenu(labels: [], datasets: []);
     }
-    return DayWiseMenu(
-      labels: json['labels'] != null
-          ? List<String>.from(json['labels'].map((e) => e.toString()))
-          : [],
-      datasets: json['datasets'] is List
-          ? (json['datasets'] as List)
-              .map((e) => MenuDataset.fromJson(e))
-              .toList()
-          : [],
-    );
+    
+    List<String> labels = [];
+    List<MenuDataset> datasets = [];
+    
+    if (json['labels'] != null && json['labels'] is List) {
+      labels = List<String>.from(json['labels'].map((e) => e.toString()));
+    }
+    
+    if (json['datasets'] is List) {
+      datasets = (json['datasets'] as List)
+          .map((e) => MenuDataset.fromJson(e))
+          .toList();
+    }
+    
+    print('[v0] DayWiseMenu parsed - labels: ${labels.length}, datasets: ${datasets.length}');
+    
+    return DayWiseMenu(labels: labels, datasets: datasets);
   }
 }
 
