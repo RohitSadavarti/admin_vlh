@@ -184,46 +184,66 @@ class ApiService {
     }
   }
 
-  // FIXED: Get all orders using the correct Django endpoint
-  Future<List<PendingOrder>> getAllOrders() async {
-    try {
-      // Use the endpoint that exists in your Django urls.py
-      final uri = Uri.parse('$_baseUrl/api/all-orders/');
+Future<List<PendingOrder>> getAllOrders() async {
+  try {
+    final uri = Uri.parse('$_baseUrl/api/all-orders/');
 
-      print('📡 Fetching orders from: $uri');
+    print('📡 Fetching orders from: $uri');
 
-      final response = await _client.get(uri, headers: _getHeaders());
+    final response = await _client.get(uri, headers: _getHeaders());
 
-      print('Orders Response Status: ${response.statusCode}');
-      print('Orders Response Body: ${response.body.substring(0, 200)}...');
-
-      if (response.statusCode == 200) {
+    print('Orders Response Status: ${response.statusCode}');
+    
+    // CRITICAL FIX: Check status code BEFORE parsing body
+    if (response.statusCode == 200) {
+      // Safely check body length before substring
+      final bodyPreview = response.body.length > 200 
+          ? response.body.substring(0, 200) 
+          : response.body;
+      print('Orders Response Body Preview: $bodyPreview...');
+      
+      try {
         final responseData = jsonDecode(response.body);
-
-        // Handle both possible response formats
-        List<dynamic> ordersData;
-        if (responseData is List) {
-          ordersData = responseData;
-        } else if (responseData is Map && responseData.containsKey('orders')) {
-          ordersData = responseData['orders'];
-        } else {
-          throw Exception('Unexpected response format');
+        
+        // FIXED: Handle the new response format with success flag
+        if (responseData is Map) {
+          if (responseData['success'] == true && responseData.containsKey('orders')) {
+            final ordersData = responseData['orders'] as List;
+            print('✅ Found ${ordersData.length} orders');
+            
+            return ordersData
+                .map((json) => PendingOrder.fromJson(json))
+                .toList();
+          } else if (responseData.containsKey('error')) {
+            throw Exception(responseData['error']);
+          }
+        } else if (responseData is List) {
+          // Fallback for direct list response
+          print('✅ Found ${responseData.length} orders (direct list)');
+          return responseData
+              .map((json) => PendingOrder.fromJson(json))
+              .toList();
         }
-
-        print('✅ Found ${ordersData.length} orders');
-
-        return ordersData.map((json) => PendingOrder.fromJson(json)).toList();
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        throw Exception('Authentication failed');
-      } else {
-        throw Exception('Failed to fetch orders: ${response.statusCode}');
+        
+        throw Exception('Unexpected response format');
+        
+      } catch (e) {
+        print('❌ Error parsing response: $e');
+        print('Response body: ${response.body}');
+        rethrow;
       }
-    } catch (e) {
-      print('❌ Error fetching orders: $e');
-      rethrow;
+    } else if (response.statusCode == 401 || response.statusCode == 403) {
+      throw Exception('Authentication failed');
+    } else {
+      print('❌ HTTP Error: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      throw Exception('Failed to fetch orders: ${response.statusCode}');
     }
+  } catch (e) {
+    print('❌ Error fetching orders: $e');
+    rethrow;
   }
-
+}
   // FIXED: Update order status
   Future<Map<String, dynamic>> updateOrderStatus(
       int orderId, String status) async {
@@ -410,3 +430,4 @@ class ApiService {
     _client.close();
   }
 }
+
