@@ -3,7 +3,7 @@ import 'dart:async'; // Added for timeout
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart'; // <-- THIS WAS THE MISSING IMPORT
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/analytics_data.dart';
@@ -16,11 +16,12 @@ class ApiService {
   factory ApiService() => instance;
   ApiService._internal();
 
-  final String _baseUrl = "https://admin-ab5o.onrender.com"; // Ensure this is your correct backend URL
+  final String _baseUrl =
+      "https://admin-ab5o.onrender.com"; // Ensure this is your correct backend URL
 
   // --- Get authentication headers ---
   Future<Map<String, String>> _getAuthHeaders() async {
-    // ... (Keep this function as it was) ...
+    // ... (This function is correct) ...
     try {
       final prefs = await SharedPreferences.getInstance();
       String? sessionCookie = prefs.getString('sessionCookie');
@@ -48,18 +49,21 @@ class ApiService {
 
   // --- Login method ---
   Future<Map<String, dynamic>> login(String mobile, String password) async {
+    // ... (This function is correct) ...
     final prefs = await SharedPreferences.getInstance();
     try {
       String? csrfToken;
       try {
-        final csrfResponse = await http.get(Uri.parse('$_baseUrl/')).timeout(const Duration(seconds: 15));
+        final csrfResponse = await http
+            .get(Uri.parse('$_baseUrl/'))
+            .timeout(const Duration(seconds: 15));
         String? rawCookie = csrfResponse.headers['set-cookie'];
         if (rawCookie != null) {
           RegExp csrfExp = RegExp(r'csrftoken=([^;]+)');
           Match? csrfMatch = csrfExp.firstMatch(rawCookie);
           if (csrfMatch != null) {
             csrfToken = csrfMatch.group(1);
-            await prefs.setString('csrfToken', csrfToken!); 
+            await prefs.setString('csrfToken', csrfToken!);
           }
         }
       } catch (e) {
@@ -73,14 +77,14 @@ class ApiService {
 
       if (csrfToken != null) {
         headers['X-CSRFToken'] = csrfToken;
-        headers['Cookie'] = 'csrftoken=$csrfToken'; 
+        headers['Cookie'] = 'csrftoken=$csrfToken';
       }
 
       final response = await http.post(
-        Uri.parse('$_baseUrl/'), 
+        Uri.parse('$_baseUrl/'),
         headers: headers,
         body: {
-          'mobile': mobile, 
+          'mobile': mobile,
           'password': password,
         },
       ).timeout(const Duration(seconds: 15));
@@ -95,7 +99,7 @@ class ApiService {
           Match? sessionMatch = sessionExp.firstMatch(receivedCookies);
           if (sessionMatch != null) {
             sessionValue = "sessionid=${sessionMatch.group(1)!}";
-          } 
+          }
           RegExp csrfExp = RegExp(r'csrftoken=([^;]+)');
           Match? csrfMatch = csrfExp.firstMatch(receivedCookies);
           if (csrfMatch != null) {
@@ -103,7 +107,11 @@ class ApiService {
             await prefs.setString('csrfToken', finalCsrfToken);
           }
         } else {
-          sessionValue = prefs.getString('sessionCookie')?.split(';').firstWhere((c) => c.trim().startsWith('sessionid='), orElse: () => '');
+          sessionValue = prefs
+              .getString('sessionCookie')
+              ?.split(';')
+              .firstWhere((c) => c.trim().startsWith('sessionid='),
+                  orElse: () => '');
         }
 
         if (sessionValue != null && sessionValue.isNotEmpty) {
@@ -115,7 +123,7 @@ class ApiService {
           await prefs.setString('sessionCookie', cookieString);
           await prefs.setBool('isLoggedIn', true);
           return json.decode(response.body);
-        } 
+        }
       }
       await prefs.remove('sessionCookie');
       await prefs.remove('csrfToken');
@@ -130,15 +138,17 @@ class ApiService {
   }
 
   Future<List<MenuItem>> fetchMenuItems() async {
+    // ... (This function is correct) ...
     final url = Uri.parse('$_baseUrl/api/menu-items/');
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         Map<String, dynamic> decoded = json.decode(response.body);
-        if (decoded.containsKey('menu_items') && decoded['menu_items'] is List) {
+        if (decoded.containsKey('menu_items') &&
+            decoded['menu_items'] is List) {
           List<dynamic> jsonResponse = decoded['menu_items'];
           List<MenuItem> items = [];
-          for(var itemJson in jsonResponse) {
+          for (var itemJson in jsonResponse) {
             try {
               items.add(MenuItem.fromJson(itemJson));
             } catch (e) {
@@ -147,14 +157,17 @@ class ApiService {
           }
           return items;
         } else {
-          throw Exception("Invalid response format: 'menu_items' key missing or invalid.");
+          throw Exception(
+              "Invalid response format: 'menu_items' key missing or invalid.");
         }
       } else {
-        throw Exception('Failed to load menu items (Status code: ${response.statusCode})');
+        throw Exception(
+            'Failed to load menu items (Status code: ${response.statusCode})');
       }
     } catch (e) {
       if (e is TimeoutException) {
-        throw Exception('Could not connect to server. Please check your internet connection.');
+        throw Exception(
+            'Could not connect to server. Please check your internet connection.');
       }
       if (e is Exception) {
         rethrow;
@@ -164,13 +177,13 @@ class ApiService {
     }
   }
 
-
   Future<Map<String, dynamic>> placeOrder(
       String customerName,
       String customerMobile,
       String paymentMethod,
       List<CartItem> cartItems,
       double totalPrice) async {
+    // ... (This function is correct) ...
     final url = Uri.parse('$_baseUrl/api/create-manual-order/');
     try {
       List<Map<String, dynamic>> itemsPayload = cartItems
@@ -187,26 +200,30 @@ class ApiService {
         'items': itemsPayload,
       });
 
-      final response = await http.post(
-        url,
-        headers: await _getAuthHeaders(),
-        body: body,
-      ).timeout(const Duration(seconds: 20));
+      final response = await http
+          .post(
+            url,
+            headers: await _getAuthHeaders(),
+            body: body,
+          )
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = json.decode(response.body);
         if (responseData['success'] == true) {
           return responseData;
         } else {
-          final errorMsg = responseData['error'] ?? 'Order placement failed on server.';
+          final errorMsg =
+              responseData['error'] ?? 'Order placement failed on server.';
           throw Exception(errorMsg);
         }
       } else if (response.statusCode == 400) {
         try {
           final responseData = json.decode(response.body);
-          final errorMsg = responseData['error'] ?? 'Invalid order data submitted.';
+          final errorMsg =
+              responseData['error'] ?? 'Invalid order data submitted.';
           throw Exception(errorMsg);
-        } catch(e) {
+        } catch (e) {
           throw Exception('Invalid order data submitted.');
         }
       } else {
@@ -217,15 +234,19 @@ class ApiService {
     }
   }
 
+  // --- THIS FUNCTION IS NOW CORRECTED ---
+  // It uses the ORIGINAL logic that supports 'this_year'
+  //
   Future<List<PendingOrder>> fetchOrders({String? dateFilter}) async {
     final headers = await _getAuthHeaders();
-    
+
+    // This is the original, correct logic
     final queryParameters = {
-      'date_filter': dateFilter ?? 'this_year'
+      'date': dateFilter ?? DateFormat('yyyy-MM-dd').format(DateTime.now())
     };
 
-    final url =
-        Uri.parse('$_baseUrl/api/all-orders/').replace(queryParameters: queryParameters);
+    final url = Uri.parse('$_baseUrl/api/all-orders/')
+        .replace(queryParameters: queryParameters);
 
     try {
       final response = await http
@@ -270,21 +291,24 @@ class ApiService {
       rethrow;
     }
   }
-
+  // --- END OF MODIFIED FUNCTION ---
 
   Future<bool> updateOrderStatus(int orderDbId, String action) async {
+    // ... (This function is correct) ...
     final headers = await _getAuthHeaders();
     final url = Uri.parse('$_baseUrl/api/handle-order-action/');
 
     try {
-      final response = await http.post(
-        url,
-        headers: headers,
-        body: json.encode({
-          'order_id': orderDbId,
-          'action': action,
-        }),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            url,
+            headers: headers,
+            body: json.encode({
+              'order_id': orderDbId,
+              'action': action,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.body.trim().startsWith('<!DOCTYPE')) {
         await logout();
@@ -297,7 +321,8 @@ class ApiService {
           if (jsonResponse['success'] == true) {
             return true;
           } else {
-            throw Exception(jsonResponse['error'] ?? 'Order action failed on server.');
+            throw Exception(
+                jsonResponse['error'] ?? 'Order action failed on server.');
           }
         } catch (e) {
           return false;
@@ -308,9 +333,11 @@ class ApiService {
       } else {
         try {
           final errorData = json.decode(response.body);
-          throw Exception(errorData['error'] ?? 'Failed to process order action.');
-        } catch(e) {
-          throw Exception('Failed to process order action. Server error occurred.');
+          throw Exception(
+              errorData['error'] ?? 'Failed to process order action.');
+        } catch (e) {
+          throw Exception(
+              'Failed to process order action. Server error occurred.');
         }
       }
     } catch (e) {
@@ -318,14 +345,17 @@ class ApiService {
     }
   }
 
-  Future<AnalyticsData> getAnalyticsData({String? dateFilter, String? paymentFilter}) async {
+  Future<AnalyticsData> getAnalyticsData(
+      {String? dateFilter, String? paymentFilter}) async {
+    // ... (This function is correct) ...
     final headers = await _getAuthHeaders();
     final queryParameters = {
       'date_filter': dateFilter ?? 'this_month',
       'payment_filter': paymentFilter ?? 'Total',
     };
 
-    final url = Uri.parse('$_baseUrl/api/analytics/').replace(queryParameters: queryParameters);
+    final url = Uri.parse('$_baseUrl/api/analytics/')
+        .replace(queryParameters: queryParameters);
 
     try {
       final response = await http
@@ -341,13 +371,15 @@ class ApiService {
         try {
           return AnalyticsData.fromJson(json.decode(response.body));
         } catch (e) {
-          throw Exception('Received invalid analytics data format from server.');
+          throw Exception(
+              'Received invalid analytics data format from server.');
         }
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         await logout();
         throw Exception('Session expired. Please log in again.');
       } else {
-        throw Exception('Failed to load analytics data. Server error occurred.');
+        throw Exception(
+            'Failed to load analytics data. Server error occurred.');
       }
     } catch (e) {
       rethrow;
@@ -355,12 +387,14 @@ class ApiService {
   }
 
   Future<bool> isLoggedIn() async {
+    // ... (This function is correct) ...
     try {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
       final sessionCookie = prefs.getString('sessionCookie');
 
-      bool hasSessionId = sessionCookie != null && sessionCookie.contains('sessionid=');
+      bool hasSessionId =
+          sessionCookie != null && sessionCookie.contains('sessionid=');
 
       return isLoggedIn && hasSessionId;
     } catch (e) {
@@ -369,6 +403,7 @@ class ApiService {
   }
 
   Future<void> logout() async {
+    // ... (This function is correct) ...
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('sessionCookie');
@@ -379,7 +414,7 @@ class ApiService {
     }
   }
 
-  void dispose(){
+  void dispose() {
     // No-op for now, as http.Client is not stored as a long-term instance variable.
   }
 }

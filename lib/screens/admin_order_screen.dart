@@ -1,5 +1,5 @@
 // lib/screens/admin_order_screen.dart
-import 'dart:async';
+import 'dart:async'; // Correct import
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -29,7 +29,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
   final TextEditingController _onlineSearchController = TextEditingController();
   List<PendingOrder> _allOnlineOrders = [];
   List<PendingOrder> _filteredOnlineOrders = [];
-  String _onlineSelectedFilter = 'this_year';
+  String _onlineSelectedFilter = 'this_month'; // Default to this_month
   DateTimeRange? _onlineCustomDateRange;
   String _onlineSearchQuery = '';
 
@@ -38,7 +38,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
       TextEditingController();
   List<PendingOrder> _allCounterOrders = [];
   List<PendingOrder> _filteredCounterOrders = [];
-  String _counterSelectedFilter = 'this_year';
+  String _counterSelectedFilter = 'this_month'; // Default to this_month
   DateTimeRange? _counterCustomDateRange;
   String _counterSearchQuery = '';
 
@@ -93,8 +93,10 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
       _errorMessage = null;
     });
     try {
-      // Fetch a broad set of data (e.g., 'this_year').
-      final allOrders = await _apiService.fetchOrders(dateFilter: 'this_year');
+      //
+      // Load 'this_month' by default
+      //
+      final allOrders = await _apiService.fetchOrders(dateFilter: 'this_month');
       if (!mounted) return;
 
       // Set the base lists
@@ -160,8 +162,9 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         }
         break;
       default:
-        startDate = DateTime(now.year, 1, 1);
-        endDate = DateTime(now.year + 1, 1, 1);
+        // Default to 'this_month'
+        startDate = DateTime(now.year, now.month, 1);
+        endDate = DateTime(now.year, now.month + 1, 1);
         break;
     }
 
@@ -223,8 +226,9 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         }
         break;
       default:
-        startDate = DateTime(now.year, 1, 1);
-        endDate = DateTime(now.year + 1, 1, 1);
+        // Default to 'this_month'
+        startDate = DateTime(now.year, now.month, 1);
+        endDate = DateTime(now.year, now.month + 1, 1);
         break;
     }
 
@@ -340,7 +344,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         }
         return 'Custom Range';
       default:
-        return 'This Year';
+        return 'This Month';
     }
   }
 
@@ -362,7 +366,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         }
         return 'Custom Range';
       default:
-        return 'This Year';
+        return 'This Month';
     }
   }
 
@@ -1006,7 +1010,6 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                 child: Row(children: [
                   Text('${item.quantity}x',
                       style: textTheme.bodySmall?.copyWith(
-                          // This is the corrected line
                           color: theme.colorScheme.onSurface.withOpacity(0.6))),
                   const SizedBox(width: 8),
                   Expanded(child: Text(item.name, style: textTheme.bodyMedium)),
