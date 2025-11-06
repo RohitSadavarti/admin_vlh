@@ -3,7 +3,6 @@ import 'dart:async'; // Added for timeout
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart'; // <-- THIS WAS THE MISSING IMPORT
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/analytics_data.dart';
@@ -241,9 +240,7 @@ class ApiService {
     final headers = await _getAuthHeaders();
 
     // This is the original, correct logic
-    final queryParameters = {
-      'date': dateFilter ?? DateFormat('yyyy-MM-dd').format(DateTime.now())
-    };
+    final queryParameters = {'date_filter': dateFilter ?? 'this_month'};
 
     final url = Uri.parse('$_baseUrl/api/all-orders/')
         .replace(queryParameters: queryParameters);
