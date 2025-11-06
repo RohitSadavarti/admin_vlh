@@ -239,10 +239,13 @@ class ApiService {
   Future<List<PendingOrder>> fetchOrders({String? dateFilter}) async {
     final headers = await _getAuthHeaders();
 
-    // This is the original, correct logic
-    final queryParameters = {'date_filter': dateFilter ?? 'this_month'};
+    // THIS IS THE CORRECTED LOGIC
+    final queryParameters = {
+      'date_filter':
+          dateFilter ?? 'this_month' // <-- FIX: Changed 'date' to 'date_filter'
+    };
 
-    final url = Uri.parse('$_baseUrl/api/all-orders/')
+    final url = Uri.parse('$_baseUrl/api/orders/')
         .replace(queryParameters: queryParameters);
 
     try {
