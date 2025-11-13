@@ -1,13 +1,13 @@
 // lib/widgets/quantity_control.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/menu_item.dart';
 import '../providers/cart_provider.dart';
 
 class QuantityControl extends StatelessWidget {
   final MenuItem item;
-  
-  // Removed onAdd and onRemove, we'll use the provider
+
   const QuantityControl({super.key, required this.item});
 
   @override
@@ -28,8 +28,9 @@ class QuantityControl extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
-            child: const Text('ADD'),
+            child: const Text('Add'),
           );
         }
 

@@ -76,18 +76,18 @@ class _CartScreenState extends State<CartScreen> {
       final List<CartItem> currentCartItems = cart.itemsAsList;
       final double currentTotalAmount = cart.totalAmount;
 
-      // Pass the CartItem list and double directly to placeOrder
-      // The conversion will happen inside the API service
+      print('[v0] Attempting to place order with name: $customerName, mobile: $customerMobile, items: ${currentCartItems.length}, total: $currentTotalAmount');
+      
       final result = await _apiService.placeOrder(
         customerName,
         customerMobile,
         _selectedPaymentMethod.toLowerCase(),
-        currentCartItems, // Pass List<CartItem> directly
-        currentTotalAmount, // Pass double directly
+        currentCartItems,
+        currentTotalAmount,
       );
 
-      final String orderId = result['order_id']?.toString() ?? 'N/A';
-      print('Order placed successfully! Backend Order ID: $orderId');
+      final String orderId = result['order_id']?.toString() ?? result['id']?.toString() ?? 'N/A';
+      print('[v0] Order placed successfully! Backend Order ID: $orderId');
 
       final orderDetails = OrderDetails(
         orderId: orderId,
@@ -109,7 +109,7 @@ class _CartScreenState extends State<CartScreen> {
         );
       }
     } catch (e) {
-      print('Error placing order in UI: $e');
+      print('[v0] Error placing order in UI: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

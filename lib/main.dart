@@ -12,14 +12,20 @@ import 'screens/cart_screen.dart';
 import 'screens/invoice_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/take_order_screen.dart';
+import 'screens/printer_setup_screen.dart'; // Added printer setup screen import
+import 'screens/menu_management_screen.dart'; // Added import for menu management screen
 import 'services/api_service.dart';
+import 'services/printer_service.dart'; // Added printer service import
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => CartProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => CartProvider()),
+        ChangeNotifierProvider(create: (context) => PrinterService()), // Added printer service
+      ],
       child: const MyApp(),
     ),
   );
@@ -55,6 +61,8 @@ class _MyAppState extends State<MyApp> {
         '/admin-dashboard': (context) => const AdminDashboardScreen(),
         '/admin-orders': (context) => const AdminOrderScreen(),
         '/admin-analytics': (context) => const AdminAnalyticsScreen(),
+        '/printer-setup': (context) => const PrinterSetupScreen(), // Added printer setup route
+        '/menu-management': (context) => const MenuManagementScreen(), // Added menu management route
       },
       onGenerateRoute: (settings) {
         if (settings.name == InvoiceScreen.routeName) {

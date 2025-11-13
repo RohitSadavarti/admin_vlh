@@ -38,7 +38,7 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
           
-          // --- NEW ADMIN LINKS ---
+          // --- NEW ADMIN LINKS --- 
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text('Admin Panel', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -58,15 +58,15 @@ class AppDrawer extends StatelessWidget {
             title: const Text('Analytics'),
             onTap: () => _navigateTo(context, '/admin-analytics'),
           ),
-          // ListTile(
-          //   leading: const Icon(Icons.menu_book),
-          //   title: const Text('Menu Management'),
-          //   onTap: () => _navigateTo(context, '/admin-menu'),
-          // ),
+          ListTile(
+            leading: const Icon(Icons.menu_book),
+            title: const Text('Menu Management'),
+            onTap: () => _navigateTo(context, '/menu-management'),
+          ),
           
           const Divider(),
 
-          // --- POS LINK ---
+          // --- POS LINK --- 
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text('Point of Sale', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -79,7 +79,7 @@ class AppDrawer extends StatelessWidget {
 
           const Divider(),
 
-          // --- LOGOUT ---
+          // --- LOGOUT --- 
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Logout'),

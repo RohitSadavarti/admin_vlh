@@ -1,9 +1,9 @@
 // lib/screens/invoice_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-// Import your OrderDetails model
+import 'package:provider/provider.dart';
 import '../models/order_details.dart';
+import '../services/printer_service.dart';
 
 class InvoiceScreen extends StatefulWidget {
   static const routeName = '/invoice';
@@ -25,20 +25,119 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   @override
   void initState() {
     super.initState();
-    details = widget.orderDetails; // Initialize details from the widget
-    // Removed _quickConnect() call
+    details = widget.orderDetails;
   }
 
   // --- Thermal Print Logic ---
   // (This is your working 58mm print logic)
   Future<void> _printInvoice() async {
-    _showError('Thermal printer functionality is currently disabled. Please use the Share Invoice feature instead.');
+    try {
+      final printerService = Provider.of<PrinterService>(context, listen: false);
+
+      if (!printerService.isConnected) {
+        // Show dialog to connect printer
+        if (!mounted) return;
+        
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('No Printer Connected'),
+            content: const Text('Please connect your thermal printer first.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/printer-setup');
+                },
+                child: const Text('Connect Printer'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      // Show loading
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  'Printing to ${printerService.connectedPrinter?.name}...',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Prepare print data
+      List<Map<String, dynamic>> printItems = [];
+      for (var cartItem in details.items) {
+        printItems.add({
+          'name': cartItem.item.name,
+          'quantity': cartItem.quantity,
+          'price': cartItem.item.price,
+          'total': cartItem.item.price * cartItem.quantity,
+        });
+      }
+
+      final success = await printerService.printInvoice(
+        storeName: 'VANITA LUNCH HOME',
+        customerName: details.customerName,
+        mobileNumber: details.customerMobile,
+        paymentMethod: details.paymentMethod,
+        items: printItems,
+        totalAmount: details.totalPrice,
+        invoiceNumber: 'INV${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 10)}',
+        printDate: details.formattedDate,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invoice printed successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Print failed: ${printerService.errorMessage}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Print error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // --- Share Invoice Placeholder ---
   // (This shows a message, as seen in your screenshot)
   Future<void> _shareInvoice(BuildContext context) async {
-    _showError('Share functionality not yet implemented.');
+    // _showError('Share functionality not yet implemented.');
     // If you want to add PDF sharing later, you can use the
     // 'printing' and 'pdf' packages here.
   }
@@ -96,7 +195,36 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           ),
         ),
         actions: [
-          const SizedBox(width: 8), // Add some padding if needed
+          Consumer<PrinterService>(
+            builder: (context, printerService, _) {
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/printer-setup'),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.print,
+                        color: printerService.isConnected ? Colors.green : Colors.white,
+                        size: 24,
+                      ),
+                      if (printerService.isConnected)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 2),
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -521,43 +649,51 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [primaryColor, primaryColor.withOpacity(0.8)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.home, color: Colors.white),
-                      label: Text(
-                        'Back to Menu',
-                        style: GoogleFonts.roboto(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
+                  child: Consumer<PrinterService>(
+                    builder: (context, printerService, _) {
+                      return Container(
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: printerService.isConnected
+                                ? [Colors.green.shade600, Colors.green.shade400]
+                                : [primaryColor, primaryColor.withOpacity(0.8)],
+                          ),
                           borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (printerService.isConnected ? Colors.green : primaryColor).withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ),
-                      onPressed: () {
-                        Navigator.of(context)
-                            .popUntil((route) => route.isFirst);
-                      },
-                    ),
+                        child: ElevatedButton.icon(
+                          icon: Icon(
+                            printerService.isConnected ? Icons.print : Icons.print_disabled,
+                            color: Colors.white,
+                          ),
+                          label: Text(
+                            printerService.isConnected ? 'Print Invoice' : 'Setup Printer',
+                            style: GoogleFonts.roboto(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: printerService.isConnected
+                              ? _printInvoice
+                              : () => Navigator.pushNamed(context, '/printer-setup'),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -569,9 +705,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: OutlinedButton.icon(
-                      icon: Icon(Icons.share, color: primaryColor),
+                      icon: Icon(Icons.home, color: primaryColor),
                       label: Text(
-                        'Share Invoice',
+                        'Back to Menu',
                         style: GoogleFonts.roboto(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -585,7 +721,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      onPressed: () => _shareInvoice(context),
+                      onPressed: () {
+                        Navigator.of(context).popUntil((route) => route.isFirst);
+                      },
                     ),
                   ),
                 ),
@@ -628,7 +766,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       Icon(Icons.phone, size: 16, color: secondaryColor),
                       const SizedBox(width: 4),
                       Text(
-                        '9892955938 / 9768559898',
+                        '7666717724 / 9221022103',
                         style: GoogleFonts.roboto(
                           fontSize: 12,
                           color: secondaryColor,
@@ -694,8 +832,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       ],
     );
   }
-
-  // Removed _buildPrinterStatus() and associated logic
 
   @override
   void dispose() {
