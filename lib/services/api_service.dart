@@ -530,8 +530,10 @@ class ApiService {
       print("[v0] Headers: $headers");
       print("[v0] Body: $body");
 
+      // --- CHANGE THIS FROM http.put TO http.post ---
       final response = await http
-          .put(
+          .post(
+            // <--- CHANGED to POST
             url,
             headers: headers,
             body: body,

@@ -24,7 +24,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   String? _selectedMealType;
   MenuItem? _editingItem;
 
-  final List<String> categories = ['Main Course', 'Starters', 'Beverages', 'Desserts'];
+  final List<String> categories = [
+    'Main Course',
+    'Starters',
+    'Beverages',
+    'Desserts'
+  ];
   final List<String> vegNonvegOptions = ['Veg', 'Non-Veg', 'Contains Egg'];
   final List<String> mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'All Day'];
 
@@ -80,6 +85,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   }
 
   Future<void> _saveMenuItem() async {
+    if (!mounted) return; // Check if the widget is still in the tree
+
     if (_itemNameController.text.isEmpty ||
         _priceController.text.isEmpty ||
         _selectedCategory == null) {
@@ -120,14 +127,16 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_editingItem == null ? 'Item added successfully' : 'Item updated successfully'),
+            content: Text(_editingItem == null
+                ? 'Item added successfully'
+                : 'Item updated successfully'),
             backgroundColor: Colors.green,
           ),
         );
 
         _clearFormFields();
         _loadMenuItems();
-        Navigator.pop(context);
+        Navigator.pop(context); // Close the dialog
       }
     } catch (e) {
       if (mounted) {
@@ -164,7 +173,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     if (confirmed == true) {
       try {
         await _apiService.deleteMenuItem(item.id);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -388,7 +397,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 children: [
                   Icon(Icons.restaurant_menu_rounded,
                       size: 64,
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.5)),
                   const SizedBox(height: 16),
                   const Text('No menu items found'),
                   const SizedBox(height: 8),
@@ -507,7 +519,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       icon: const Icon(Icons.edit, size: 16),
                       label: const Text('Edit'),
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                       ),
                     ),
                     ElevatedButton.icon(
@@ -517,7 +530,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                       ),
                     ),
                   ],
