@@ -649,3 +649,37 @@ class ApiService {
     // Cleanup if needed
   }
 }
+// In lib/services/api_service.dart, inside the ApiService class
+
+// --- NEW FUNCTION TO ACCEPT/REJECT ORDERS ---
+Future<bool> handleOrderAction(int orderDbId, String action) async {
+  // This endpoint comes from your urls.py
+  final url = Uri.parse('$_baseUrl/api/handle-order-action/');
+  final headers = await _getAuthHeaders();
+
+  try {
+    final response = await http
+        .post(
+          url,
+          headers: headers,
+          body: json.encode({
+            'order_id': orderDbId, // Your API expects 'order_id'
+            'action': action, // Your API expects 'action'
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      Map<String, dynamic> jsonResponse = json.decode(response.body);
+      return jsonResponse['success'] == true;
+    } else {
+      print("[v0] handleOrderAction failed: ${response.body}");
+      throw Exception('Update failed (${response.statusCode})');
+    }
+  } catch (e) {
+    print("[v0] handleOrderAction error: $e");
+    rethrow;
+  }
+}
+
+// ... keep all your other functions like login, fetchMenuItems, etc.

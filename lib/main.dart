@@ -1,4 +1,5 @@
 // lib/main.dart
+import 'package:firebase_core/firebase_core.dart'; // Added Firebase import
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,20 +12,24 @@ import 'screens/admin_order_screen.dart';
 import 'screens/cart_screen.dart';
 import 'screens/invoice_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/menu_management_screen.dart';
+import 'screens/printer_setup_screen.dart';
 import 'screens/take_order_screen.dart';
-import 'screens/printer_setup_screen.dart'; // Added printer setup screen import
-import 'screens/menu_management_screen.dart'; // Added import for menu management screen
 import 'services/api_service.dart';
-import 'services/printer_service.dart'; // Added printer service import
+import 'services/notification_service.dart'; // Added NotificationService import
+import 'services/printer_service.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); // Initialize Firebase
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => CartProvider()),
-        ChangeNotifierProvider(create: (context) => PrinterService()), // Added printer service
+        ChangeNotifierProvider(create: (context) => PrinterService()),
       ],
       child: const MyApp(),
     ),
@@ -39,6 +44,16 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  late final NotificationService
+      _notificationService; // Add notification service
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationService = NotificationService(navigatorKey: navigatorKey);
+    _notificationService.initialize();
+  }
+
   @override
   void dispose() {
     ApiService().dispose();
@@ -49,11 +64,12 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Vanita Lunch Home',
+      navigatorKey: navigatorKey, // Add navigator key for notifications
       debugShowCheckedModeBanner: false,
       theme: buildTheme(isDark: false),
       darkTheme: buildTheme(isDark: true),
       themeMode: ThemeMode.system,
-      home: const AuthWrapper(), // Use AuthWrapper as home
+      home: const AuthWrapper(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/take-order': (context) => const TakeOrderScreen(),
@@ -61,8 +77,8 @@ class _MyAppState extends State<MyApp> {
         '/admin-dashboard': (context) => const AdminDashboardScreen(),
         '/admin-orders': (context) => const AdminOrderScreen(),
         '/admin-analytics': (context) => const AdminAnalyticsScreen(),
-        '/printer-setup': (context) => const PrinterSetupScreen(), // Added printer setup route
-        '/menu-management': (context) => const MenuManagementScreen(), // Added menu management route
+        '/printer-setup': (context) => const PrinterSetupScreen(),
+        '/menu-management': (context) => const MenuManagementScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == InvoiceScreen.routeName) {
@@ -80,7 +96,8 @@ class _MyAppState extends State<MyApp> {
 }
 
 ThemeData buildTheme({required bool isDark}) {
-  final primaryColor = isDark ? const Color(0xFF3B82F6) : const Color(0xFF2563EB);
+  final primaryColor =
+      isDark ? const Color(0xFF3B82F6) : const Color(0xFF2563EB);
   final secondaryColor =
       isDark ? const Color(0xFF10B981) : const Color(0xFF059669);
   final backgroundColor =
@@ -123,7 +140,9 @@ ThemeData buildTheme({required bool isDark}) {
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: surfaceColor,
-      shadowColor: isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.05),
+      shadowColor: isDark
+          ? Colors.black.withOpacity(0.4)
+          : Colors.black.withOpacity(0.05),
       surfaceTintColor: Colors.transparent,
       margin: EdgeInsets.zero,
     ),
@@ -133,8 +152,7 @@ ThemeData buildTheme({required bool isDark}) {
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        textStyle:
-            const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         elevation: 1,
       ),
     ),
@@ -148,8 +166,7 @@ ThemeData buildTheme({required bool isDark}) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0F2F5),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -168,8 +185,8 @@ ThemeData buildTheme({required bool isDark}) {
       ),
     ),
     dataTableTheme: DataTableThemeData(
-      headingRowColor:
-          MaterialStateProperty.all(isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade50),
+      headingRowColor: MaterialStateProperty.all(
+          isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade50),
       headingTextStyle: TextStyle(
         fontWeight: FontWeight.w600,
         fontSize: 13,
