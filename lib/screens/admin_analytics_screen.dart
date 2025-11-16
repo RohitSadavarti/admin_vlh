@@ -705,7 +705,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
                 '${pct.toStringAsFixed(1)}%',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: isDark ? Colors.white : Colors.black,
                   fontWeight: FontWeight.bold,
                   fontSize: 11,
                 ),
@@ -946,24 +946,20 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           color: colors[i % colors.length],
           dataLabelSettings: DataLabelSettings(
             isVisible: true,
-            labelPosition: ChartDataLabelPosition.outside,
-            labelAlignment: ChartDataLabelAlignment.top,
-            textStyle: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.bold,
-              fontSize: 10,
-            ),
+            labelPosition: ChartDataLabelPosition.inside,
+            labelAlignment: ChartDataLabelAlignment.middle,
             builder: (dynamic data, dynamic point, dynamic series,
                 int pointIndex, int seriesIndex) {
-              final count = (data as _Top5ItemData).count;
-              if (count == 0) return const SizedBox.shrink();
+              final double count = (data as _Top5ItemData).count;
+              if (count == 0) {
+                return const SizedBox.shrink();
+              }
               return Text(
-                '${seriesIndex + 1}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: colors[seriesIndex % colors.length],
+                count.toStringAsFixed(0),
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 11,
+                  fontSize: 10,
                 ),
               );
             },
