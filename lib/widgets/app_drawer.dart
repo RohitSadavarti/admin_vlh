@@ -1,4 +1,3 @@
-// lib/widgets/app_drawer.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,13 +9,12 @@ class AppDrawer extends StatelessWidget {
     await prefs.setBool('isLoggedIn', false);
 
     if (context.mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
     }
   }
 
-  // Helper to navigate
   void _navigateTo(BuildContext context, String routeName) {
-    Navigator.pop(context); // Close drawer
+    Navigator.pop(context);
     if (ModalRoute.of(context)?.settings.name != routeName) {
       Navigator.pushReplacementNamed(context, routeName);
     }
@@ -24,66 +22,121 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: <Widget>[
+      child: Column(
+        children: [
           DrawerHeader(
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
+              color: theme.colorScheme.primary,
             ),
-            child: const Text(
-              'Vanita Lunch Home',
-              style: TextStyle(color: Colors.white, fontSize: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.2),
+                  ),
+                  child: const Icon(
+                    Icons.account_circle,
+                    color: Colors.white,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Vanita Lunch Home',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Admin Dashboard',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
-          
-          // --- NEW ADMIN LINKS --- 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Text('Admin Panel', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Text(
+                    'Admin Panel',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.dashboard),
+                  title: const Text('Dashboard'),
+                  onTap: () => _navigateTo(context, '/admin-dashboard'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.notifications_active),
+                  title: const Text('Order Management'),
+                  onTap: () => _navigateTo(context, '/admin-orders'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.bar_chart),
+                  title: const Text('Analytics'),
+                  onTap: () => _navigateTo(context, '/admin-analytics'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.menu_book),
+                  title: const Text('Menu Management'),
+                  onTap: () => _navigateTo(context, '/menu-management'),
+                ),
+                const Divider(),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Text(
+                    'Point of Sale',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.receipt_long),
+                  title: const Text('Take Order'),
+                  onTap: () => _navigateTo(context, '/take-order'),
+                ),
+              ],
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.dashboard),
-            title: const Text('Dashboard'),
-            onTap: () => _navigateTo(context, '/admin-dashboard'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.notifications_active),
-            title: const Text('Order Management'),
-            onTap: () => _navigateTo(context, '/admin-orders'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.bar_chart),
-            title: const Text('Analytics'),
-            onTap: () => _navigateTo(context, '/admin-analytics'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.menu_book),
-            title: const Text('Menu Management'),
-            onTap: () => _navigateTo(context, '/menu-management'),
-          ),
-          
-          const Divider(),
-
-          // --- POS LINK --- 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Text('Point of Sale', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-          ),
-          ListTile(
-            leading: const Icon(Icons.receipt_long),
-            title: const Text('Take Order'),
-            onTap: () => _navigateTo(context, '/take-order'),
-          ),
-
-          const Divider(),
-
-          // --- LOGOUT --- 
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Logout'),
-            onTap: () => _logout(context),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ListTile(
+              leading: Icon(
+                Icons.logout,
+                color: theme.colorScheme.error,
+              ),
+              title: Text(
+                'Logout',
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+              onTap: () => _logout(context),
+            ),
           ),
         ],
       ),

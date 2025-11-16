@@ -7,6 +7,8 @@ import '../providers/cart_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/quantity_control.dart';
+import '../widgets/bottom_nav_bar.dart';
+import '../widgets/profile_app_bar.dart'; // Import ProfileAppBar
 
 class TakeOrderScreen extends StatefulWidget {
   const TakeOrderScreen({super.key});
@@ -82,8 +84,9 @@ class _TakeOrderScreenState extends State<TakeOrderScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Take Order (POS)'),
+      drawer: const AppDrawer(),
+      appBar: ProfileAppBar(
+        title: 'Take Order (POS)', // Changed from Text('...') to String
         actions: [
           Consumer<CartProvider>(
             builder: (context, cart, child) {
@@ -103,7 +106,6 @@ class _TakeOrderScreenState extends State<TakeOrderScreen> {
           const SizedBox(width: 16),
         ],
       ),
-      drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -119,7 +121,7 @@ class _TakeOrderScreenState extends State<TakeOrderScreen> {
                             crossAxisCount: 2,
                             crossAxisSpacing: 16,
                             mainAxisSpacing: 16,
-                            childAspectRatio: 2.8, // Adjust for better layout
+                            childAspectRatio: 2.8,
                           ),
                           itemCount: _filteredMenuItems.length,
                           itemBuilder: (context, index) {
@@ -143,6 +145,10 @@ class _TakeOrderScreenState extends State<TakeOrderScreen> {
             label: Text('View Cart (₹${cart.totalAmount.toStringAsFixed(2)})'),
           );
         },
+      ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: 4,
+        onTap: (index) {},
       ),
     );
   }

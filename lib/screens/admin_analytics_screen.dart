@@ -6,6 +6,8 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import '../models/analytics_data.dart';
 import '../services/api_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/bottom_nav_bar.dart';
+import '../widgets/profile_app_bar.dart'; // Import ProfileAppBar
 
 // --- HELPER CLASSES FOR SYNCFUSION CHARTS ---
 class _MostOrderedData {
@@ -54,7 +56,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   Future<AnalyticsData>? _analyticsData;
   String _selectedFilter = 'this_month';
   DateTimeRange? _customDateRange;
-  String _paymentFilter = 'Total'; // 'all', 'cash', 'online'
+  String _paymentFilter =
+      'Total'; // Changed back to 'Total' to match backend expectations
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -92,8 +95,22 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
 
   void _loadAnalyticsData() {
     setState(() {
-      _analyticsData = _apiService.getAnalyticsData(
-          dateFilter: _selectedFilter, paymentFilter: _paymentFilter);
+      if (_selectedFilter == 'custom' && _customDateRange != null) {
+        final startDate = _customDateRange!.start.toString().split(' ')[0];
+        final endDate = _customDateRange!.end.toString().split(' ')[0];
+
+        _analyticsData = _apiService.getAnalyticsData(
+          dateFilter: _selectedFilter,
+          paymentFilter: _paymentFilter,
+          startDate: startDate,
+          endDate: endDate,
+        );
+      } else {
+        _analyticsData = _apiService.getAnalyticsData(
+          dateFilter: _selectedFilter,
+          paymentFilter: _paymentFilter,
+        );
+      }
     });
     _animationController.forward(from: 0);
   }
@@ -102,22 +119,19 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analytics Dashboard'),
+      drawer: const AppDrawer(),
+      appBar: ProfileAppBar(
+        title: 'Analytics Dashboard', // Changed from Text('...') to String
+        onRefresh: _loadAnalyticsData,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loadAnalyticsData,
-            tooltip: 'Refresh Data',
-          ),
           _buildDateFilter(isDark),
           _buildPaymentFilter(isDark),
           const SizedBox(width: 8),
         ],
       ),
-      drawer: const AppDrawer(),
       body: FutureBuilder<AnalyticsData>(
         future: _analyticsData,
         builder: (context, snapshot) {
@@ -201,6 +215,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           );
         },
       ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex:
+            1, // changed currentIndex from 2 to 1 so Analytics icon highlights correctly
+        onTap: (index) {},
+      ),
     );
   }
 
@@ -267,12 +286,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
       child: ToggleButtons(
         isSelected: [
           _paymentFilter == 'Total',
-          _paymentFilter == 'cash',
-          _paymentFilter == 'online'
+          _paymentFilter == 'Cash',
+          _paymentFilter == 'Online'
         ],
         onPressed: (index) {
           setState(() {
-            _paymentFilter = ['Total', 'cash', 'online'][index];
+            _paymentFilter = ['Total', 'Cash', 'Online'][index];
             _loadAnalyticsData();
           });
         },
@@ -672,16 +691,25 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           dataLabelSettings: DataLabelSettings(
             isVisible: true,
             labelPosition: ChartDataLabelPosition.outside,
+            labelIntersectAction: LabelIntersectAction.shift,
             textStyle: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w600,
-              fontSize: 12,
+              fontSize: 11,
             ),
             builder: (dynamic data, dynamic point, dynamic series,
                 int pointIndex, int seriesIndex) {
               final pct =
                   total > 0 ? ((data as _PieChartData).value / total) * 100 : 0;
-              return Text('${pct.toStringAsFixed(0)}%');
+              return Text(
+                '${pct.toStringAsFixed(1)}%',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              );
             },
           ),
         ),
@@ -816,6 +844,30 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           color: Theme.of(context).colorScheme.primary,
           width: 0.8,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+          dataLabelSettings: DataLabelSettings(
+            isVisible: true,
+            labelAlignment: ChartDataLabelAlignment.top,
+            textStyle: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+            ),
+            builder: (dynamic data, dynamic point, dynamic series,
+                int pointIndex, int seriesIndex) {
+              final revenue = (data as _RevenueOrdersData).revenue;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Text(
+                  _formatNumber(revenue),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              );
+            },
+          ),
         ),
         LineSeries<_RevenueOrdersData, String>(
           name: 'Orders',
@@ -826,6 +878,30 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           color: Theme.of(context).colorScheme.secondary,
           width: 3,
           markerSettings: const MarkerSettings(isVisible: true),
+          dataLabelSettings: DataLabelSettings(
+            isVisible: true,
+            labelAlignment: ChartDataLabelAlignment.top,
+            textStyle: TextStyle(
+              color: Theme.of(context).colorScheme.secondary,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+            ),
+            builder: (dynamic data, dynamic point, dynamic series,
+                int pointIndex, int seriesIndex) {
+              final orders = (data as _RevenueOrdersData).orders;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Text(
+                  orders.toStringAsFixed(0),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -868,6 +944,30 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
           xValueMapper: (_Top5ItemData data, _) => data.day,
           yValueMapper: (_Top5ItemData data, _) => data.count,
           color: colors[i % colors.length],
+          dataLabelSettings: DataLabelSettings(
+            isVisible: true,
+            labelPosition: ChartDataLabelPosition.outside,
+            labelAlignment: ChartDataLabelAlignment.top,
+            textStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+            ),
+            builder: (dynamic data, dynamic point, dynamic series,
+                int pointIndex, int seriesIndex) {
+              final count = (data as _Top5ItemData).count;
+              if (count == 0) return const SizedBox.shrink();
+              return Text(
+                '${seriesIndex + 1}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors[seriesIndex % colors.length],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              );
+            },
+          ),
         ),
       );
     }

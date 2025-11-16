@@ -1,4 +1,3 @@
-// lib/screens/admin_order_screen.dart
 import 'dart:async'; // Correct import
 
 import 'package:flutter/material.dart';
@@ -11,6 +10,8 @@ import '../models/pending_order.dart';
 import '../screens/invoice_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/bottom_nav_bar.dart';
+import '../widgets/profile_app_bar.dart';
 
 class AdminOrderScreen extends StatefulWidget {
   const AdminOrderScreen({super.key});
@@ -429,36 +430,41 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
 
     return Scaffold(
       drawer: const AppDrawer(),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
-            title: const Text('Order Management'),
-            pinned: true,
-            floating: true,
-            forceElevated: innerBoxIsScrolled,
-            actions: [
-              IconButton(
-                  onPressed: _loadOrders,
-                  icon: const Icon(Icons.refresh_rounded),
-                  tooltip: 'Refresh Orders'),
-              const SizedBox(width: 8),
-            ],
-            bottom: TabBar(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + kToolbarHeight),
+        child: Column(
+          children: [
+            ProfileAppBar(
+              title: 'Order Management',
+              onRefresh: _loadOrders,
+            ),
+            TabBar(
               controller: _tabController,
               indicatorColor: theme.colorScheme.primary,
               labelColor: theme.colorScheme.primary,
               unselectedLabelColor:
                   theme.colorScheme.onSurface.withOpacity(0.7),
               tabs: [
-                Tab(child: Text('Online Orders ($onlineOrderCount)')),
+                Tab(child: Text('Online Orders (${_filteredOnlineOrders.length})')),
                 Tab(
                     child: Text(
                         'Counter Orders (${_filteredCounterOrders.length})')),
               ],
             ),
-          )
+          ],
+        ),
+      ),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverOverlapAbsorber(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+          ),
         ],
         body: _buildBody(preparingOrders, readyOrders, pickedUpOrders),
+      ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: 0,
+        onTap: (index) {},
       ),
     );
   }

@@ -15,8 +15,44 @@ class ApiService {
   factory ApiService() => instance;
   ApiService._internal();
 
-  // ✅ CORRECT BASE URL
   final String _baseUrl = "https://admin-ab5o.onrender.com";
+
+  void _saveCookiesFromResponse(http.Response response) {
+    String? rawCookie = response.headers['set-cookie'];
+    if (rawCookie != null) {
+      print("[v0] Received set-cookie: $rawCookie");
+
+      // Extract sessionid
+      RegExp sessionRegex = RegExp(r'sessionid=([^;]+)');
+      Match? sessionMatch = sessionRegex.firstMatch(rawCookie);
+
+      // Extract csrftoken
+      RegExp csrfRegex = RegExp(r'csrftoken=([^;]+)');
+      Match? csrfMatch = csrfRegex.firstMatch(rawCookie);
+
+      if (sessionMatch != null) {
+        String sessionValue = "sessionid=${sessionMatch.group(1)!}";
+
+        // If we also have csrf, append it
+        if (csrfMatch != null) {
+          String csrfValue = csrfMatch.group(1)!;
+          sessionValue += "; csrftoken=$csrfValue";
+
+          // Save CSRF token separately
+          SharedPreferences.getInstance().then((prefs) {
+            prefs.setString('csrfToken', csrfValue);
+          });
+        }
+
+        // Save the combined cookie
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setString('sessionCookie', sessionValue);
+        });
+
+        print("[v0] Saved session cookie: ${sessionValue.substring(0, 30)}...");
+      }
+    }
+  }
 
   // --- Authentication Headers ---
   Future<Map<String, String>> _getAuthHeaders() async {
@@ -32,12 +68,15 @@ class ApiService {
 
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
         headers['Cookie'] = sessionCookie;
+        print(
+            "[v0] Using session cookie: ${sessionCookie.substring(0, 20)}...");
       }
       if (csrfToken != null && csrfToken.isNotEmpty) {
         headers['X-CSRFToken'] = csrfToken;
       }
       return headers;
     } catch (e) {
+      print("[v0] Error getting auth headers: $e");
       return {
         'Content-Type': 'application/json; charset=UTF-8',
         'Referer': _baseUrl,
@@ -49,12 +88,17 @@ class ApiService {
   Future<Map<String, dynamic>> login(String mobile, String password) async {
     final prefs = await SharedPreferences.getInstance();
     try {
+      print("[v0] Starting login for mobile: $mobile");
+
       // Get CSRF token first
       String? csrfToken;
       try {
         final csrfResponse = await http
             .get(Uri.parse('$_baseUrl/'))
             .timeout(const Duration(seconds: 15));
+
+        _saveCookiesFromResponse(csrfResponse);
+
         String? rawCookie = csrfResponse.headers['set-cookie'];
         if (rawCookie != null) {
           RegExp csrfExp = RegExp(r'csrftoken=([^;]+)');
@@ -62,10 +106,12 @@ class ApiService {
           if (csrfMatch != null) {
             csrfToken = csrfMatch.group(1);
             await prefs.setString('csrfToken', csrfToken!);
+            print("[v0] Got CSRF token: ${csrfToken.substring(0, 10)}...");
           }
         }
       } catch (e) {
         csrfToken = prefs.getString('csrfToken');
+        print("[v0] Using cached CSRF token");
       }
 
       Map<String, String> headers = {
@@ -78,53 +124,40 @@ class ApiService {
         headers['Cookie'] = 'csrftoken=$csrfToken';
       }
 
-      // ✅ FIXED: Use JSON body with 'mobile' key
       final response = await http
           .post(
             Uri.parse('$_baseUrl/login/'),
             headers: headers,
             body: json.encode({
-              'mobile': mobile, // ✅ Changed from 'username' to 'mobile'
+              'mobile': mobile,
               'password': password,
             }),
           )
           .timeout(const Duration(seconds: 15));
 
+      print("[v0] Login response: ${response.statusCode}");
+      print("[v0] Login body: ${response.body}");
+
+      _saveCookiesFromResponse(response);
+
       if (response.statusCode == 200) {
-        String? receivedCookies = response.headers['set-cookie'];
-        String? sessionValue;
-        String? finalCsrfToken = csrfToken;
+        try {
+          final responseData = json.decode(response.body);
 
-        if (receivedCookies != null) {
-          RegExp sessionExp = RegExp(r'sessionid=([^;]+)');
-          Match? sessionMatch = sessionExp.firstMatch(receivedCookies);
-          if (sessionMatch != null) {
-            sessionValue = "sessionid=${sessionMatch.group(1)!}";
-          }
-          RegExp csrfExp = RegExp(r'csrftoken=([^;]+)');
-          Match? csrfMatch = csrfExp.firstMatch(receivedCookies);
-          if (csrfMatch != null) {
-            finalCsrfToken = csrfMatch.group(1)!;
-            await prefs.setString('csrfToken', finalCsrfToken);
-          }
-        }
-
-        if (sessionValue != null && sessionValue.isNotEmpty) {
-          String cookieString = sessionValue;
-          if (finalCsrfToken != null) {
-            cookieString += "; csrftoken=$finalCsrfToken";
-          }
-
-          await prefs.setString('sessionCookie', cookieString);
-          await prefs.setBool('isLoggedIn', true);
-
-          // Parse response
-          try {
-            final responseData = json.decode(response.body);
+          if (responseData['success'] == true) {
+            await prefs.setBool('isLoggedIn', true);
+            print("[v0] Login successful!");
             return responseData;
-          } catch (e) {
-            return {'success': true, 'message': 'Login successful'};
+          } else {
+            return {
+              'success': false,
+              'message': responseData['error'] ?? 'Login failed'
+            };
           }
+        } catch (e) {
+          // If JSON parsing fails, assume success if status is 200
+          await prefs.setBool('isLoggedIn', true);
+          return {'success': true, 'message': 'Login successful'};
         }
       }
 
@@ -133,6 +166,7 @@ class ApiService {
       await prefs.setBool('isLoggedIn', false);
       return {'success': false, 'message': 'Login failed'};
     } catch (e) {
+      print("[v0] Login error: $e");
       await prefs.remove('sessionCookie');
       await prefs.remove('csrfToken');
       await prefs.setBool('isLoggedIn', false);
@@ -180,8 +214,7 @@ class ApiService {
       String paymentMethod,
       List<CartItem> cartItems,
       double totalPrice) async {
-    // ✅ CORRECT ENDPOINT: /api/place-order/ (for customer orders)
-    final url = Uri.parse('$_baseUrl/api/place-order/');
+    final url = Uri.parse('$_baseUrl/api/create-manual-order/');
 
     try {
       print("[v0] Starting placeOrder request to: $url");
@@ -206,35 +239,50 @@ class ApiService {
       final headers = await _getAuthHeaders();
       print("[v0] Auth headers: $headers");
 
-      final response = await http
-          .post(
-            url,
-            headers: headers,
-            body: body,
-          )
-          .timeout(const Duration(seconds: 20));
+      final client = http.Client();
 
-      print("[v0] Response status: ${response.statusCode}");
-      print("[v0] Response body: ${response.body}");
+      try {
+        final response = await client
+            .post(
+              url,
+              headers: headers,
+              body: body,
+            )
+            .timeout(const Duration(seconds: 20));
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        try {
-          final responseData = json.decode(response.body);
-          if (responseData['success'] == true) {
-            return responseData;
-          } else {
-            throw Exception(responseData['error'] ?? 'Order failed');
-          }
-        } catch (e) {
-          // If it's valid JSON response, return success
-          return {
-            'success': true,
-            'message': 'Order placed successfully!',
-          };
+        print("[v0] Response status: ${response.statusCode}");
+        print("[v0] Response body: ${response.body}");
+
+        if (response.statusCode == 302 || response.statusCode == 301) {
+          print(
+              "[v0] Received redirect (${response.statusCode}). Session may be expired.");
+          // Try to refresh session and retry
+          await logout();
+          throw Exception(
+              'Session expired. Please login again. Error: ${response.statusCode}');
         }
-      } else {
-        throw Exception(
-            'Failed to place order (${response.statusCode}): ${response.body}');
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          try {
+            final responseData = json.decode(response.body);
+            if (responseData['success'] == true) {
+              return responseData;
+            } else {
+              throw Exception(responseData['error'] ?? 'Order failed');
+            }
+          } catch (e) {
+            // If it's valid JSON response, return success
+            return {
+              'success': true,
+              'message': 'Order placed successfully!',
+            };
+          }
+        } else {
+          throw Exception(
+              'Failed to place order (${response.statusCode}): ${response.body}');
+        }
+      } finally {
+        client.close();
       }
     } catch (e) {
       print("[v0] Exception in placeOrder: $e");
@@ -318,13 +366,24 @@ class ApiService {
 
   // ✅ FIXED: Get Analytics Data with better error handling
   Future<AnalyticsData> getAnalyticsData(
-      {String? dateFilter, String? paymentFilter}) async {
+      {String? dateFilter,
+      String? paymentFilter,
+      String? startDate,
+      String? endDate}) async {
     final headers = await _getAuthHeaders();
 
     final queryParameters = {
       'date_filter': dateFilter ?? 'this_month',
       'payment_filter': paymentFilter ?? 'Total',
     };
+
+    if (startDate != null &&
+        startDate.isNotEmpty &&
+        endDate != null &&
+        endDate.isNotEmpty) {
+      queryParameters['start_date'] = startDate;
+      queryParameters['end_date'] = endDate;
+    }
 
     // ✅ CORRECT ENDPOINT: /api/analytics/
     final url = Uri.parse('$_baseUrl/api/analytics/')
@@ -458,6 +517,9 @@ class ApiService {
     try {
       print("[v0] Adding menu item: $itemName");
 
+      final headers = await _getAuthHeaders();
+      print("[v0] Headers: $headers");
+
       final body = json.encode({
         'item_name': itemName,
         'price': price,
@@ -470,20 +532,20 @@ class ApiService {
       });
 
       final response = await http
-          .post(
-            url,
-            headers: await _getAuthHeaders(),
-            body: body,
-          )
+          .post(url, headers: headers, body: body)
           .timeout(const Duration(seconds: 15));
 
       print("[v0] Add menu response: ${response.statusCode}");
+      print("[v0] Add menu response body: ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = json.decode(response.body);
         return {'success': true, 'data': responseData};
+      } else if (response.statusCode == 401) {
+        throw Exception('Session expired. Please login again.');
       } else {
-        throw Exception('Failed to add menu item (${response.statusCode})');
+        throw Exception(
+            'Failed to add menu item (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
       print("[v0] Error adding menu item: $e");

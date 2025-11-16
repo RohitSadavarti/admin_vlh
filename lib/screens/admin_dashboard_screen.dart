@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../models/analytics_data.dart';
 import '../services/api_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/bottom_nav_bar.dart';
+import '../widgets/profile_app_bar.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -32,18 +34,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loadData,
-            tooltip: 'Refresh Data',
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       drawer: const AppDrawer(),
+      appBar: ProfileAppBar(
+        title: 'Dashboard',
+        onRefresh: _loadData,
+      ),
       body: FutureBuilder<AnalyticsData>(
         future: _analyticsDataFuture,
         builder: (context, snapshot) {
@@ -86,6 +81,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
           return _buildDashboardGrid(context, metrics);
         },
+      ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: 2, // corrected currentIndex to 2 (Dashboard is the center/index 2)
+        onTap: (index) {},
       ),
     );
   }

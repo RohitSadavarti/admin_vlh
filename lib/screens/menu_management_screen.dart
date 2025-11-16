@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../models/menu_item.dart';
 import '../services/api_service.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/bottom_nav_bar.dart';
+import '../widgets/profile_app_bar.dart'; // Import ProfileAppBar
 
 class MenuManagementScreen extends StatefulWidget {
   const MenuManagementScreen({super.key});
@@ -18,6 +21,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   late TextEditingController _descriptionController;
   late TextEditingController _imageUrlController;
   late TextEditingController _availabilityTimeController;
+  late TextEditingController _searchController; // Add search controller
 
   String? _selectedCategory;
   String? _selectedVegNonveg;
@@ -41,6 +45,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     _descriptionController = TextEditingController();
     _imageUrlController = TextEditingController();
     _availabilityTimeController = TextEditingController();
+    _searchController = TextEditingController(); // Initialize search controller
     _loadMenuItems();
   }
 
@@ -51,6 +56,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     _descriptionController.dispose();
     _imageUrlController.dispose();
     _availabilityTimeController.dispose();
+    _searchController.dispose(); // Dispose search controller
     super.dispose();
   }
 
@@ -347,15 +353,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Menu Management'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loadMenuItems,
-            tooltip: 'Refresh',
-          ),
-        ],
+      drawer: const AppDrawer(),
+      appBar: ProfileAppBar(
+        title: 'Menu Management', // Changed from const Text('...') to String
+        onRefresh: _loadMenuItems,
       ),
       body: FutureBuilder<List<MenuItem>>(
         future: _menuItemsFuture,
@@ -390,42 +391,88 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
 
           final items = snapshot.data ?? [];
 
-          if (items.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.restaurant_menu_rounded,
-                      size: 64,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.5)),
-                  const SizedBox(height: 16),
-                  const Text('No menu items found'),
-                  const SizedBox(height: 8),
-                  const Text('Add one using the button below',
-                      style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            );
-          }
+          final searchQuery = _searchController.text.toLowerCase();
+          final filteredItems = items
+              .where((item) => item.name.toLowerCase().contains(searchQuery))
+              .toList();
 
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: MediaQuery.of(context).size.width > 600 ? 2 : 1,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.2,
-            ),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return _buildMenuItemCard(item);
-            },
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search menu items...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() {});
+                  },
+                ),
+              ),
+              Expanded(
+                child: filteredItems.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _searchController.text.isEmpty
+                                  ? Icons.restaurant_menu_rounded
+                                  : Icons.search_off_rounded,
+                              size: 64,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withOpacity(0.5),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(_searchController.text.isEmpty
+                                ? 'No menu items found'
+                                : 'No items match your search'),
+                            const SizedBox(height: 8),
+                            if (_searchController.text.isEmpty)
+                              const Text('Add one using the button below',
+                                  style: TextStyle(color: Colors.grey)),
+                          ],
+                        ),
+                      )
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount:
+                              MediaQuery.of(context).size.width > 600 ? 2 : 1,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 1.2,
+                        ),
+                        itemCount: filteredItems.length,
+                        itemBuilder: (context, index) {
+                          final item = filteredItems[index];
+                          return _buildMenuItemCard(item);
+                        },
+                      ),
+              ),
+            ],
           );
         },
+      ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: 3,
+        onTap: (index) {},
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddEditDialog(),
