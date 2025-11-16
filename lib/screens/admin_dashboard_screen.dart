@@ -1,9 +1,12 @@
 // lib/screens/admin_dashboard_screen.dart
+import 'dart:async'; // <-- MODIFICATION: Added for StreamSubscription
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../models/analytics_data.dart';
+import '../models/analytics_data.dart'; // <-- MODIFICATION: Added import for TableOrder
 import '../services/api_service.dart';
+import '../services/order_update_service.dart'; // <-- MODIFICATION: Added
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/profile_app_bar.dart';
@@ -19,13 +22,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final ApiService _apiService = ApiService();
   Future<AnalyticsData>? _analyticsDataFuture;
 
+  // <-- MODIFICATION: Added subscription variable
+  late StreamSubscription _orderUpdateSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+
+    // <-- MODIFICATION: Start listening for order updates
+    _orderUpdateSubscription = OrderUpdateService().stream.listen((_) {
+      print("Refreshing AdminDashboardScreen due to order update...");
+      if (mounted) {
+        _loadData();
+      }
+    });
   }
 
-  void _loadData() {
+  // <-- MODIFICATION: Added dispose method
+  @override
+  void dispose() {
+    _orderUpdateSubscription.cancel();
+    super.dispose();
+  }
+
+  // <-- MODIFICATION: Changed to 'Future<void>' and added 'async'
+  Future<void> _loadData() async {
     setState(() {
       _analyticsDataFuture = _apiService.getAnalyticsData();
     });
@@ -50,22 +72,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.error_outline,
-                        size: 48, color: Theme.of(context).colorScheme.error),
+                    const Icon(Icons.error_outline_rounded,
+                        color: Colors.red, size: 50),
                     const SizedBox(height: 16),
-                    Text('Failed to load dashboard data',
-                        style: Theme.of(context).textTheme.headlineSmall),
+                    Text(
+                      'Failed to load dashboard data.\nPlease check your connection.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
-                    Text('${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                      '${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Colors.grey),
+                    ),
                     const SizedBox(height: 20),
                     ElevatedButton.icon(
-                      onPressed: _loadData,
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(Icons.refresh_rounded),
                       label: const Text('Retry'),
+                      onPressed: _loadData,
                     ),
                   ],
                 ),
@@ -77,41 +107,61 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           }
 
           final data = snapshot.data!;
-          final metrics = data.keyMetrics;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
 
-          return _buildDashboardGrid(context, metrics);
+          return RefreshIndicator(
+            onRefresh:
+                _loadData, // <-- This now correctly matches the function type
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _buildKeyMetricsSection(data.keyMetrics, isDark),
+                  const SizedBox(height: 32),
+                  // _buildChartsSection(data, isDark), // Placeholder
+                  // const SizedBox(height: 32),
+                  _buildRecentOrdersTable(data.tableData, isDark),
+                  const SizedBox(height: 60), // Add padding for bottom nav
+                ],
+              ),
+            ),
+          );
         },
       ),
+      // <-- MODIFICATION: Added missing 'onTap' and fixed 'currentIndex'
       bottomNavigationBar: BottomNavBar(
-        currentIndex: 2, // corrected currentIndex to 2 (Dashboard is the center/index 2)
-        onTap: (index) {},
+        currentIndex: 2, // Dashboard is index 2
+        onTap: (index) {
+          // Handle navigation if needed, or leave empty
+        },
       ),
     );
   }
 
-  Widget _buildDashboardGrid(BuildContext context, KeyMetrics metrics) {
+  Widget _buildKeyMetricsSection(KeyMetrics metrics, bool isDark) {
     final theme = Theme.of(context);
-    final numberFormatter = NumberFormat.compact(locale: 'en_IN');
+    final textTheme = theme.textTheme;
 
     final List<Map<String, dynamic>> dashboardItems = [
       {
         'icon': Icons.account_balance_wallet_rounded,
         'title': 'Total Revenue',
-        'value': '₹${numberFormatter.format(metrics.totalRevenue)}',
+        'value': '₹${NumberFormat.compact().format(metrics.totalRevenue)}',
         'color': theme.colorScheme.secondary,
         'route': '/admin-analytics',
       },
       {
         'icon': Icons.shopping_bag_rounded,
         'title': 'Total Orders',
-        'value': numberFormatter.format(metrics.totalOrders),
+        'value': metrics.totalOrders.toString(),
         'color': theme.colorScheme.primary,
         'route': '/admin-orders',
       },
       {
         'icon': Icons.trending_up_rounded,
         'title': 'Avg. Order Value',
-        'value': '₹${numberFormatter.format(metrics.averageOrderValue)}',
+        'value': '₹${NumberFormat.compact().format(metrics.averageOrderValue)}',
         'color': Colors.amber.shade700,
         'route': '/admin-analytics',
       },
@@ -122,84 +172,129 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         'color': Colors.deepPurple.shade400,
         'route': '/take-order',
       },
-      {
-        'icon': Icons.bar_chart_rounded,
-        'title': 'View Analytics',
-        'value': 'Deep Dive',
-        'color': Colors.teal.shade400,
-        'route': '/admin-analytics',
-      },
-      {
-        'icon': Icons.list_alt_rounded,
-        'title': 'Manage Orders',
-        'value': 'All',
-        'color': Colors.pink.shade400,
-        'route': '/admin-orders',
-      },
     ];
 
-    return LayoutBuilder(builder: (context, constraints) {
-      final crossAxisCount = constraints.maxWidth > 1100
-          ? 3
-          : constraints.maxWidth > 700
-              ? 2
-              : 1;
-      final childAspectRatio = crossAxisCount == 1 ? 4.0 : 2.0;
-
-      return GridView.builder(
-        padding: const EdgeInsets.all(16.0),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: childAspectRatio,
-        ),
-        itemCount: dashboardItems.length,
-        itemBuilder: (context, index) {
-          final item = dashboardItems[index];
-          return _buildDashboardItem(
-            context,
-            icon: item['icon'],
-            title: item['title'],
-            value: item['value'],
-            color: item['color'],
-            onTap: () {
+    return GridView.builder(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 2.2, // Adjusted aspect ratio
+      ),
+      itemCount: dashboardItems.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemBuilder: (context, index) {
+        final item = dashboardItems[index];
+        return _buildDashboardItem(
+          title: item['title'],
+          value: item['value'],
+          icon: item['icon'],
+          color: item['color'],
+          textTheme: textTheme,
+          theme: theme,
+          onTap: () {
+            if (ModalRoute.of(context)?.settings.name != item['route']) {
               Navigator.pushNamed(context, item['route']);
-            },
-          );
-        },
-      );
-    });
+            }
+          },
+        );
+      },
+    );
   }
 
-  Widget _buildDashboardItem(
-    BuildContext context, {
-    required IconData icon,
+  Widget _buildChartsSection(AnalyticsData data, bool isDark) {
+    // This is a placeholder as the implementation wasn't in the provided file
+    return Container(
+      child: const Text('Charts Section'),
+    );
+  }
+
+  // <-- MODIFICATION: Changed 'OrderData' to 'TableOrder'
+  Widget _buildRecentOrdersTable(List<TableOrder> orders, bool isDark) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Recent Orders',
+          style: theme.textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 16),
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.dividerColor),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Order ID')),
+                DataColumn(label: Text('Items')),
+                DataColumn(label: Text('Total')),
+                DataColumn(label: Text('Status')),
+              ],
+              rows: orders.take(5).map((order) {
+                // Show 5 recent orders
+                return DataRow(
+                  cells: [
+                    DataCell(Text(order.orderId)),
+                    DataCell(SizedBox(
+                      width: 150, // Give items column more space
+                      child: Text(
+                        order.itemsText,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )),
+                    DataCell(Text('₹${order.totalPrice.toStringAsFixed(0)}')),
+                    DataCell(Text(order.orderStatus)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDashboardItem({
     required String title,
     required String value,
+    required IconData icon,
     required Color color,
+    required TextTheme textTheme,
+    required ThemeData theme,
     required VoidCallback onTap,
   }) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-
     return Card(
-      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.5)),
+      ),
+      color: theme.cardColor,
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 44, // Slightly smaller icon background
+                height: 44,
+                padding: const EdgeInsets.all(10), // Adjusted padding
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12), // Rounded corners
                 ),
-                child: Icon(icon, size: 28, color: color),
+                child: Icon(icon, size: 24, color: color), // Adjusted size
               ),
-              const SizedBox(width: 20),
+              const SizedBox(width: 12), // Reduced spacing
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -207,16 +302,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   children: [
                     Text(
                       title,
-                      style: textTheme.titleMedium?.copyWith(
+                      style: textTheme.titleSmall?.copyWith(
+                        // Smaller title
                         color: theme.colorScheme.onSurface.withOpacity(0.8),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4), // Reduced spacing
                     Text(
                       value,
-                      style: textTheme.headlineSmall?.copyWith(
+                      style: textTheme.titleLarge?.copyWith(
+                        // Adjusted from headlineSmall
                         fontWeight: FontWeight.w700,
                         color: color,
                       ),
@@ -226,9 +323,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded,
-                  size: 16,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4)),
             ],
           ),
         ),

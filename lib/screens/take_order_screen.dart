@@ -6,9 +6,9 @@ import '../models/menu_item.dart';
 import '../providers/cart_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/app_drawer.dart';
-import '../widgets/quantity_control.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/profile_app_bar.dart'; // Import ProfileAppBar
+import '../widgets/quantity_control.dart';
 
 class TakeOrderScreen extends StatefulWidget {
   const TakeOrderScreen({super.key});
@@ -118,7 +118,8 @@ class _TakeOrderScreenState extends State<TakeOrderScreen> {
                           padding: const EdgeInsets.all(16.0),
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
+                            crossAxisCount:
+                                1, // Changed from 2 to 1 for single column layout
                             crossAxisSpacing: 16,
                             mainAxisSpacing: 16,
                             childAspectRatio: 2.8,

@@ -126,11 +126,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
       appBar: ProfileAppBar(
         title: 'Analytics Dashboard', // Changed from Text('...') to String
         onRefresh: _loadAnalyticsData,
-        actions: [
-          _buildDateFilter(isDark),
-          _buildPaymentFilter(isDark),
-          const SizedBox(width: 8),
-        ],
+        //actions: [
+        //  _buildDateFilter(isDark),
+        //  _buildPaymentFilter(isDark),
+        //  const SizedBox(width: 8),
+        //],
       ),
       body: FutureBuilder<AnalyticsData>(
         future: _analyticsData,
@@ -204,6 +204,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildDateFilter(isDark),
+                  const SizedBox(height: 16),
+                  _buildPaymentFilter(isDark),
+                  const SizedBox(height: 32),
                   _buildKeyMetricsSection(data.keyMetrics, isDark),
                   const SizedBox(height: 32),
                   _buildChartsSection(data, isDark),
@@ -281,36 +285,39 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen>
   }
 
   Widget _buildPaymentFilter(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: ToggleButtons(
-        isSelected: [
-          _paymentFilter == 'Total',
-          _paymentFilter == 'Cash',
-          _paymentFilter == 'Online'
-        ],
-        onPressed: (index) {
-          setState(() {
-            _paymentFilter = ['Total', 'Cash', 'Online'][index];
-            _loadAnalyticsData();
-          });
-        },
-        children: const [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Text('All'),
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Text('Cash'),
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Text('Online'),
-          ),
-        ],
+    return FittedBox(
+      // Wrap with FittedBox to prevent overflow on small screens
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: ToggleButtons(
+          isSelected: [
+            _paymentFilter == 'Total',
+            _paymentFilter == 'Cash',
+            _paymentFilter == 'Online'
+          ],
+          onPressed: (index) {
+            setState(() {
+              _paymentFilter = ['Total', 'Cash', 'Online'][index];
+              _loadAnalyticsData();
+            });
+          },
+          children: const [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Text('All'),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Text('Cash'),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Text('Online'),
+            ),
+          ],
+        ),
       ),
-    );
+    ); // <-- This is the correct closing parenthesis for FittedBox
   }
 
   String _getFilterDisplayText() {

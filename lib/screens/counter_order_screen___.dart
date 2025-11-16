@@ -282,15 +282,27 @@ class _CounterOrderScreenState extends State<CounterOrderScreen> {
       case 'pending':
       case 'preparing':
         return [
-          ElevatedButton(
+          Expanded(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
               onPressed: () => _onOrderAction(order.id, 'mark_ready'),
-              child: const Text('Mark as Ready'))
+              child: const Text('Mark Ready', overflow: TextOverflow.ellipsis, maxLines: 1),
+            ),
+          ),
         ];
       case 'ready':
         return [
-          ElevatedButton(
+          Expanded(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
               onPressed: () => _onOrderAction(order.id, 'mark_picked_up'),
-              child: const Text('Mark as Picked Up'))
+              child: const Text('Mark Picked Up', overflow: TextOverflow.ellipsis, maxLines: 1),
+            ),
+          ),
         ];
       default:
         return [];
@@ -316,13 +328,16 @@ class _CounterOrderScreenState extends State<CounterOrderScreen> {
             ...order.items
                 .map((item) => Text('${item.quantity}x ${item.name}')),
             const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text('₹${order.totalPrice.toStringAsFixed(2)}',
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 16)),
-                Row(children: _buildActionButtons(order)),
+                const SizedBox(height: 12),
+                Row(
+                  children: _buildActionButtons(order),
+                ),
               ],
             ),
           ],

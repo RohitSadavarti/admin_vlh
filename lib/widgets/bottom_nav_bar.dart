@@ -80,24 +80,24 @@ class BottomNavBar extends StatelessWidget {
               onTap(index);
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     icon,
-                    color: isActive 
-                      ? theme.colorScheme.primary 
-                      : theme.colorScheme.onSurface.withOpacity(0.6),
+                    color: isActive
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     label,
                     style: TextStyle(
                       fontSize: 10,
-                      color: isActive 
-                        ? theme.colorScheme.primary 
-                        : theme.colorScheme.onSurface.withOpacity(0.6),
+                      color: isActive
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface.withOpacity(0.6),
                       fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),

@@ -1,9 +1,11 @@
 // lib/main.dart
-import 'package:firebase_core/firebase_core.dart'; // Added Firebase import
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// --- 1. IMPORT THE NEW FILE YOU GENERATED ---
+import 'firebase_options.dart';
 import 'models/order_details.dart';
 import 'providers/cart_provider.dart';
 import 'screens/admin_analytics_screen.dart';
@@ -16,14 +18,19 @@ import 'screens/menu_management_screen.dart';
 import 'screens/printer_setup_screen.dart';
 import 'screens/take_order_screen.dart';
 import 'services/api_service.dart';
-import 'services/notification_service.dart'; // Added NotificationService import
+import 'services/notification_service.dart';
 import 'services/printer_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // Initialize Firebase
+
+  // --- 2. USE THE OPTIONS FROM THE NEW FILE ---
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  // --- END OF FIX ---
 
   runApp(
     MultiProvider(
@@ -44,8 +51,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late final NotificationService
-      _notificationService; // Add notification service
+  late final NotificationService _notificationService;
 
   @override
   void initState() {
@@ -56,7 +62,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
-    ApiService().dispose();
+    ApiService.instance.dispose();
     super.dispose();
   }
 
@@ -64,12 +70,12 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Vanita Lunch Home',
-      navigatorKey: navigatorKey, // Add navigator key for notifications
+      navigatorKey: navigatorKey, // Set the navigatorKey
       debugShowCheckedModeBanner: false,
       theme: buildTheme(isDark: false),
       darkTheme: buildTheme(isDark: true),
       themeMode: ThemeMode.system,
-      home: const AuthWrapper(),
+      home: const AuthWrapper(), // Use AuthWrapper as home
       routes: {
         '/login': (context) => const LoginScreen(),
         '/take-order': (context) => const TakeOrderScreen(),

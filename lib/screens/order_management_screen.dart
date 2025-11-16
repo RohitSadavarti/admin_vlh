@@ -89,14 +89,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
 
       if (mounted) {
         setState(() {
-          _preparingOrders = online
-              .where((order) => order.orderStatus == 'open')
-              .toList();
+          _preparingOrders =
+              online.where((order) => order.orderStatus == 'open').toList();
           _readyOrders =
               online.where((order) => order.orderStatus == 'ready').toList();
-          _pickedUpOrders = online
-              .where((order) => order.orderStatus == 'pickedup')
-              .toList();
+          _pickedUpOrders =
+              online.where((order) => order.orderStatus == 'pickedup').toList();
 
           _counterOrders = counter;
           _filterCounterOrders();
@@ -129,8 +127,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
     if (_selectedDate != null) {
       filtered = filtered.where((order) {
         try {
-          DateTime orderDate =
-              DateTime.parse(order.createdAt).toLocal();
+          DateTime orderDate = DateTime.parse(order.createdAt).toLocal();
           return orderDate.year == _selectedDate!.year &&
               orderDate.month == _selectedDate!.month &&
               orderDate.day == _selectedDate!.day;
@@ -174,8 +171,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
 
   Future<void> _updateOrderStatus(int orderId, String newStatus) async {
     try {
-      bool success =
-          await _apiService.updateOrderStatus(orderId, newStatus);
+      bool success = await _apiService.updateOrderStatus(orderId, newStatus);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -257,29 +253,28 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
       return _buildErrorWidget();
     }
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildOrderSection(
-            title: 'Preparing Orders',
-            orders: _preparingOrders ?? [],
-            statusColor: Colors.amber,
-            newStatus: 'ready',
-          ),
-          _buildOrderSection(
-            title: 'Ready for Pickup',
-            orders: _readyOrders ?? [],
-            statusColor: Colors.blue,
-            newStatus: 'pickedup',
-          ),
-          _buildOrderSection(
-            title: 'Picked Up',
-            orders: _pickedUpOrders ?? [],
-            statusColor: Colors.green,
-            newStatus: null, // No action for picked up
-          ),
-        ],
-      ),
+    return ListView(
+      padding: const EdgeInsets.all(0),
+      children: [
+        _buildOrderSection(
+          title: 'Preparing Orders',
+          orders: _preparingOrders ?? [],
+          statusColor: Colors.amber,
+          newStatus: 'ready',
+        ),
+        _buildOrderSection(
+          title: 'Ready for Pickup',
+          orders: _readyOrders ?? [],
+          statusColor: Colors.blue,
+          newStatus: 'pickedup',
+        ),
+        _buildOrderSection(
+          title: 'Picked Up',
+          orders: _pickedUpOrders ?? [],
+          statusColor: Colors.green,
+          newStatus: null, // No action for picked up
+        ),
+      ],
     );
   }
 
@@ -333,40 +328,41 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
         ),
         // Counter orders list
         Expanded(
-          child: _filteredCounterOrders == null || _filteredCounterOrders!.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.inbox_outlined,
-                        size: 64,
-                        color: Colors.grey,
+          child:
+              _filteredCounterOrders == null || _filteredCounterOrders!.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.inbox_outlined,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No counter orders found',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Refresh'),
+                            onPressed: _loadAllOrders,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'No counter orders found',
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh'),
-                        onPressed: _loadAllOrders,
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _filteredCounterOrders!.length,
-                  itemBuilder: (context, index) {
-                    return _buildOrderCard(
-                      _filteredCounterOrders![index],
-                      showStatusButton: true,
-                    );
-                  },
-                ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: _filteredCounterOrders!.length,
+                      itemBuilder: (context, index) {
+                        return _buildOrderCard(
+                          _filteredCounterOrders![index],
+                          showStatusButton: true,
+                        );
+                      },
+                    ),
         ),
       ],
     );
@@ -435,7 +431,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
     String? nextStatus,
   }) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
@@ -448,11 +444,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Order #${order.orderId}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    'Order #${order.orderId}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 Container(
@@ -480,9 +478,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
               children: [
                 const Icon(Icons.person, size: 14, color: Colors.grey),
                 const SizedBox(width: 6),
-                Text(
-                  order.customerName,
-                  style: const TextStyle(fontSize: 13),
+                Expanded(
+                  child: Text(
+                    order.customerName,
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -502,9 +503,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
               children: [
                 const Icon(Icons.access_time, size: 14, color: Colors.grey),
                 const SizedBox(width: 6),
-                Text(
-                  order.createdAt,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                Expanded(
+                  child: Text(
+                    order.createdAt,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -515,43 +519,57 @@ class _OrderManagementScreenState extends State<OrderManagementScreen>
             ),
             const SizedBox(height: 6),
             ...order.items.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(
-                '${item.quantity}x ${item.name} - ₹${(item.price * item.quantity).toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 12),
-              ),
-            )),
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    '${item.quantity}x ${item.name} - ₹${(item.price * item.quantity).toStringAsFixed(2)}',
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )),
             const Divider(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '₹${order.totalPrice.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
-                if (showStatusButton && nextStatus != null)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.check, size: 16),
-                    label: Text(
-                      'Mark ${nextStatus == 'ready' ? 'Ready' : 'Picked Up'}',
+            if (showStatusButton && nextStatus != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '₹${order.totalPrice.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.check, size: 16),
+                      label: Text(
+                        'Mark ${nextStatus == 'ready' ? 'Ready' : 'Picked Up'}',
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      onPressed: () => _updateOrderStatus(order.id, nextStatus),
                     ),
-                    onPressed: () =>
-                        _updateOrderStatus(order.id, nextStatus),
                   ),
-              ],
-            ),
+                ],
+              )
+            else
+              Text(
+                '₹${order.totalPrice.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
           ],
         ),
       ),

@@ -9,6 +9,7 @@ import '../models/order_details.dart';
 import '../models/pending_order.dart';
 import '../screens/invoice_screen.dart';
 import '../services/api_service.dart';
+import '../services/order_update_service.dart'; // <-- MODIFICATION: Import the new service
 import '../widgets/app_drawer.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/profile_app_bar.dart';
@@ -25,6 +26,9 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
   final ApiService _apiService = ApiService.instance;
   late TabController _tabController;
   late Timer _timer;
+
+  // <-- MODIFICATION: Add subscription variable
+  late StreamSubscription _orderUpdateSubscription;
 
   // --- State for Online Orders ---
   final TextEditingController _onlineSearchController = TextEditingController();
@@ -58,6 +62,14 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     });
     _onlineSearchController.addListener(_onOnlineSearchChanged);
     _counterSearchController.addListener(_onCounterSearchChanged);
+
+    // <-- MODIFICATION: Start listening for order updates
+    _orderUpdateSubscription = OrderUpdateService().stream.listen((_) {
+      print("Refreshing AdminOrderScreen due to order update...");
+      if (mounted) {
+        _loadOrders();
+      }
+    });
   }
 
   @override
@@ -68,22 +80,8 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     _onlineSearchController.dispose();
     _counterSearchController.removeListener(_onCounterSearchChanged);
     _counterSearchController.dispose();
+    _orderUpdateSubscription.cancel(); // <-- MODIFICATION: Cancel the listener
     super.dispose();
-  }
-
-  // Listeners now call setState directly
-  void _onOnlineSearchChanged() {
-    setState(() {
-      _onlineSearchQuery = _onlineSearchController.text.toLowerCase();
-      _applyOnlineFilter(); // Apply filter within setState
-    });
-  }
-
-  void _onCounterSearchChanged() {
-    setState(() {
-      _counterSearchQuery = _counterSearchController.text.toLowerCase();
-      _applyCounterFilter(); // Apply filter within setState
-    });
   }
 
   // This function now calls setState only ONCE at the end
@@ -127,6 +125,21 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         });
       }
     }
+  }
+
+  // Listeners now call setState directly
+  void _onOnlineSearchChanged() {
+    setState(() {
+      _onlineSearchQuery = _onlineSearchController.text.toLowerCase();
+      _applyOnlineFilter(); // Apply filter within setState
+    });
+  }
+
+  void _onCounterSearchChanged() {
+    setState(() {
+      _counterSearchQuery = _counterSearchController.text.toLowerCase();
+      _applyCounterFilter(); // Apply filter within setState
+    });
   }
 
   // This function does NOT call setState
@@ -445,7 +458,9 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
               unselectedLabelColor:
                   theme.colorScheme.onSurface.withOpacity(0.7),
               tabs: [
-                Tab(child: Text('Online Orders (${_filteredOnlineOrders.length})')),
+                Tab(
+                    child: Text(
+                        'Online Orders (${_filteredOnlineOrders.length})')),
                 Tab(
                     child: Text(
                         'Counter Orders (${_filteredCounterOrders.length})')),
@@ -488,7 +503,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
               Text(_errorMessage!,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               ElevatedButton.icon(
                   onPressed: _loadOrders,
                   icon: const Icon(Icons.refresh),
@@ -798,47 +813,106 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                 ]),
               )),
           const Divider(height: 20),
-          Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Total',
-                      style: textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6))),
-                  Text('₹${order.totalPrice.toStringAsFixed(2)}',
-                      style: textTheme.titleLarge
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                ]),
-                if (isPreparing || isReady)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                        color: _getStatusColor(status).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Row(children: [
-                      Icon(Icons.timer_outlined,
-                          size: 18, color: _getStatusColor(status)),
-                      const SizedBox(width: 6),
-                      Text(_formatDuration(timerDuration),
-                          style: textTheme.titleMedium?.copyWith(
-                              color: _getStatusColor(status),
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.8)),
-                    ]),
-                  )
-              ]),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // Stack vertically if space is limited
+              if (constraints.maxWidth < 250) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Total',
+                            style: textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface
+                                    .withOpacity(0.6))),
+                        Text('₹${order.totalPrice.toStringAsFixed(2)}',
+                            style: textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    if (isPreparing || isReady) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                            color: _getStatusColor(status).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Row(children: [
+                          Icon(Icons.timer_outlined,
+                              size: 18, color: _getStatusColor(status)),
+                          const SizedBox(width: 6),
+                          Text(_formatDuration(timerDuration),
+                              style: textTheme.titleMedium?.copyWith(
+                                  color: _getStatusColor(status),
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.8)),
+                        ]),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _buildActionButtons(order, isOnline: true),
+                      ),
+                    ),
+                  ],
+                );
+              }
+              // Horizontal layout for larger screens
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total',
+                          style: textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withOpacity(0.6))),
+                      Text('₹${order.totalPrice.toStringAsFixed(2)}',
+                          style: textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  if (isPreparing || isReady)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: _getStatusColor(status).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Row(children: [
+                        Icon(Icons.timer_outlined,
+                            size: 18, color: _getStatusColor(status)),
+                        const SizedBox(width: 6),
+                        Text(_formatDuration(timerDuration),
+                            style: textTheme.titleMedium?.copyWith(
+                                color: _getStatusColor(status),
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.8)),
+                      ]),
+                    ),
+                  Wrap(
+                    spacing: 8,
+                    children: _buildActionButtons(order, isOnline: true),
+                  ),
+                ],
+              );
+            },
+          ),
           if (order.paymentMethod.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(children: [
               _buildTag(order.paymentMethod, Colors.grey, isOutlined: true)
             ])
           ],
-          const SizedBox(height: 12),
-          Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: _buildActionButtons(order, isOnline: true)),
         ]),
       ),
     );
@@ -850,22 +924,46 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
 
     if (isOnline) {
       if (status == 'open') {
-        buttons.add(ElevatedButton.icon(
-            icon: const Icon(Icons.check_circle_outline),
-            onPressed: () => _onOrderAction(order.id, 'ready'),
-            label: const Text('Mark Ready')));
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              onPressed: () => _onOrderAction(order.id, 'ready'),
+              label: const Text('Mark Ready', overflow: TextOverflow.ellipsis, maxLines: 1),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              ),
+            ),
+          ),
+        );
       } else if (status == 'ready') {
-        buttons.add(ElevatedButton.icon(
-            icon: const Icon(Icons.local_shipping_outlined),
-            onPressed: () => _onOrderAction(order.id, 'pickedup'),
-            label: const Text('Mark Picked Up')));
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.local_shipping_outlined, size: 18),
+              onPressed: () => _onOrderAction(order.id, 'pickedup'),
+              label: const Text('Mark Picked Up', overflow: TextOverflow.ellipsis, maxLines: 1),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              ),
+            ),
+          ),
+        );
       }
     }
 
     if (status != 'open') {
-      buttons.add(const SizedBox(width: 8));
-      buttons.add(TextButton(
-          onPressed: () => _viewInvoice(order), child: const Text('Invoice')));
+      if (buttons.isNotEmpty) {
+        buttons.add(const SizedBox(width: 6));
+      }
+      buttons.add(
+        Expanded(
+          child: TextButton(
+            onPressed: () => _viewInvoice(order),
+            child: const Text('Invoice', overflow: TextOverflow.ellipsis, maxLines: 1),
+          ),
+        ),
+      );
     }
     return buttons;
   }

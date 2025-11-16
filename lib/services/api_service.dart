@@ -436,7 +436,7 @@ class ApiService {
 
       final response = await http
           .get(url, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
       print("[v0] Orders response status: ${response.statusCode}");
 
@@ -451,6 +451,7 @@ class ApiService {
 
           if (jsonResponse['success'] == true) {
             List<dynamic> ordersJson = jsonResponse['orders'] ?? [];
+            print("[v0] Successfully parsed ${ordersJson.length} orders");
             return ordersJson
                 .map((json) => PendingOrder.fromJson(json))
                 .toList();
@@ -468,6 +469,10 @@ class ApiService {
         throw Exception(
             'Failed to load orders (${response.statusCode}): ${response.body}');
       }
+    } on TimeoutException catch (e) {
+      print("[v0] TimeoutException in getAllOrders: $e");
+      throw Exception(
+          'Request timeout - Network is too slow. Please check your internet connection and try again.');
     } catch (e) {
       print("[v0] Exception in getAllOrders: $e");
       rethrow;
@@ -645,41 +650,41 @@ class ApiService {
     }
   }
 
+  // ===================================================================
+  // --- ADD THIS FUNCTION INSIDE THE ApiService CLASS ---
+  // ===================================================================
+  Future<bool> handleOrderAction(int orderDbId, String action) async {
+    // This endpoint comes from your urls.py
+    final url = Uri.parse('$_baseUrl/api/handle-order-action/');
+    final headers = await _getAuthHeaders();
+
+    try {
+      final response = await http
+          .post(
+            url,
+            headers: headers,
+            body: json.encode({
+              'order_id': orderDbId, // API expects 'order_id'
+              'action': action, // API expects 'action'
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        Map<String, dynamic> jsonResponse = json.decode(response.body);
+        return jsonResponse['success'] == true;
+      } else {
+        print("[v0] handleOrderAction failed: ${response.body}");
+        throw Exception('Update failed (${response.statusCode})');
+      }
+    } catch (e) {
+      print("[v0] handleOrderAction error: $e");
+      rethrow;
+    }
+  }
+  // ===================================================================
+
   void dispose() {
     // Cleanup if needed
   }
 }
-// In lib/services/api_service.dart, inside the ApiService class
-
-// --- NEW FUNCTION TO ACCEPT/REJECT ORDERS ---
-Future<bool> handleOrderAction(int orderDbId, String action) async {
-  // This endpoint comes from your urls.py
-  final url = Uri.parse('$_baseUrl/api/handle-order-action/');
-  final headers = await _getAuthHeaders();
-
-  try {
-    final response = await http
-        .post(
-          url,
-          headers: headers,
-          body: json.encode({
-            'order_id': orderDbId, // Your API expects 'order_id'
-            'action': action, // Your API expects 'action'
-          }),
-        )
-        .timeout(const Duration(seconds: 15));
-
-    if (response.statusCode == 200) {
-      Map<String, dynamic> jsonResponse = json.decode(response.body);
-      return jsonResponse['success'] == true;
-    } else {
-      print("[v0] handleOrderAction failed: ${response.body}");
-      throw Exception('Update failed (${response.statusCode})');
-    }
-  } catch (e) {
-    print("[v0] handleOrderAction error: $e");
-    rethrow;
-  }
-}
-
-// ... keep all your other functions like login, fetchMenuItems, etc.
