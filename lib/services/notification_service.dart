@@ -41,7 +41,9 @@ class NotificationService {
           'order_id': message.data['order_id'] ?? 'N/A',
           'customer_name': message.data['customer_name'] ?? 'Unknown',
           'total_price': message.data['total_price'] ?? '0.0',
-          'items_json': message.data['items'] ?? '[]'
+          'items_json': message.data['items'] ?? '[]',
+          'customer_phone':
+              message.data['customer_phone'] ?? message.data['phone'] ?? 'N/A',
         };
         _showNewOrderPopup(orderData);
       }
@@ -65,9 +67,29 @@ class NotificationService {
   }
   // --------------------------------
 
+  Future<void> _playNotificationRingtone() async {
+    try {
+      // Try to play from assets first
+      await _audioPlayer.play(AssetSource('sounds/notification.mp3'));
+      print("✅ [Audio] Ringtone playing from assets");
+    } catch (e) {
+      print("⚠️ [Audio] Could not play asset sound: $e");
+      try {
+        // Fallback: Use system notification sound
+        await _audioPlayer.play(AssetSource('sounds/default_notification.wav'));
+        print("✅ [Audio] Playing fallback notification sound");
+      } catch (e2) {
+        print("❌ [Audio] Could not play any notification sound: $e2");
+      }
+    }
+  }
+
   // --- The Popup and Ringtone Logic ---
-  void _showNewOrderPopup(Map<String, dynamic> orderData) async {
+  void _showNewOrderPopup(Map<String, dynamic> orderData) {
     _isPopupShowing = true;
+
+    _playNotificationRingtone();
+
     final BuildContext? context = navigatorKey.currentContext;
 
     if (context == null) {
@@ -75,118 +97,130 @@ class NotificationService {
       return; // Cannot show dialog
     }
 
-    // Start playing ringtone on loop
+    String itemsText = "No items";
     try {
-      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-      await _audioPlayer.play(
-          AssetSource('sounds/ringtone.mp3')); // Make sure you add this file
+      final itemsJson = orderData['items_json'] ?? '[]';
+      if (itemsJson.isNotEmpty && itemsJson != '[]') {
+        final List<dynamic> items = jsonDecode(itemsJson);
+        if (items.isNotEmpty) {
+          itemsText = items.map((item) {
+            final quantity = item['quantity'] ?? 1;
+            final name = item['name'] ?? 'Unknown';
+            return '$quantity x $name';
+          }).join('\n');
+        }
+      }
     } catch (e) {
-      print("Error playing sound: $e");
+      print("❌ [Notification] Error parsing items: $e");
+      itemsText = "Unable to load items";
     }
 
-    // --- Show the PERSISTENT popup ---
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevents dismissing by tapping outside
-      builder: (BuildContext dialogContext) {
-        // Simple parsing for display
-        List<dynamic> items = [];
-        try {
-          items = jsonDecode(orderData['items_json']);
-        } catch (e) {
-          print('Error decoding items_json: $e');
-        }
-        String itemsSummary = items
-            .map((item) => "${item['quantity']}x ${item['name']}")
-            .join('\n');
-
-        return WillPopScope(
-          onWillPop: () async => false, // Prevents dismissing with back button
-          child: AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.notifications_active, color: Colors.amber, size: 28),
-                SizedBox(width: 10),
-                Text('New Customer Order!'),
-              ],
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.notifications_active, color: Colors.amber, size: 28),
+            SizedBox(width: 10),
+            Expanded(
+              child:
+                  Text('New Customer Order!', overflow: TextOverflow.ellipsis),
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '#${orderData['order_id']} - ${orderData['customer_name']}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                  Text(
-                    'Total: ₹${orderData['total_price']}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const Divider(height: 20),
-                  Text(itemsSummary.isEmpty
-                      ? "Error loading items."
-                      : itemsSummary),
-                ],
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '#${orderData['order_id']} - ${orderData['customer_name']}',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-            ),
-            actions: <Widget>[
-              // --- REJECT BUTTON ---
-              TextButton(
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('REJECT',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: () async {
-                  await _audioPlayer.stop();
-                  Navigator.of(dialogContext).pop();
-                  _isPopupShowing = false;
-
-                  try {
-                    // --- MODIFICATION HERE ---
-                    bool success = await ApiService.instance.handleOrderAction(
-                      orderData['id'],
-                      'reject',
-                    );
-                    if (success) {
-                      OrderUpdateService().notifyOrderUpdated(); // NOTIFY
-                    }
-                    // --- END MODIFICATION ---
-                  } catch (e) {
-                    print("Error rejecting order: $e");
-                  }
-                },
-              ),
-              // --- ACCEPT BUTTON ---
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: const Text('ACCEPT',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: () async {
-                  await _audioPlayer.stop();
-                  Navigator.of(dialogContext).pop();
-                  _isPopupShowing = false;
-
-                  try {
-                    // --- MODIFICATION HERE ---
-                    bool success = await ApiService.instance.handleOrderAction(
-                      orderData['id'],
-                      'accept',
-                    );
-                    if (success) {
-                      OrderUpdateService().notifyOrderUpdated(); // NOTIFY
-                    }
-                    // --- END MODIFICATION ---
-                  } catch (e) {
-                    print("Error accepting order: $e");
-                  }
-                },
+              const SizedBox(height: 8),
+              Text('Ph: ${orderData['customer_phone'] ?? 'N/A'}'),
+              const SizedBox(height: 12),
+              const Text('Items:',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(itemsText),
+              const SizedBox(height: 12),
+              Text(
+                'Total: ₹${orderData['total_price']?.toString() ?? '0'}',
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-        );
-      },
+        ),
+        actions: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('REJECT',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 12)),
+                  onPressed: () async {
+                    await _audioPlayer.stop();
+                    Navigator.of(context).pop();
+                    _isPopupShowing = false;
+
+                    try {
+                      bool success =
+                          await ApiService.instance.handleOrderAction(
+                        orderData['id'] ?? 0, // Database ID
+                        'reject',
+                      );
+                      if (success) {
+                        OrderUpdateService().notifyOrderUpdated();
+                      }
+                    } catch (e) {
+                      print("Error rejecting order: $e");
+                    }
+                  },
+                ),
+              ),
+              Expanded(
+                child: ElevatedButton(
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: const Text('ACCEPT',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 12)),
+                  onPressed: () async {
+                    await _audioPlayer.stop();
+                    Navigator.of(context).pop();
+                    _isPopupShowing = false;
+
+                    try {
+                      bool success =
+                          await ApiService.instance.handleOrderAction(
+                        orderData['id'] ?? 0, // Database ID
+                        'accept',
+                      );
+                      if (success) {
+                        OrderUpdateService().notifyOrderUpdated();
+                      }
+                    } catch (e) {
+                      print("Error accepting order: $e");
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

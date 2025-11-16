@@ -48,6 +48,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
   String _counterSearchQuery = '';
 
   bool _isLoading = true;
+  bool _hasLoadedOnce = false;
   String? _errorMessage;
 
   @override
@@ -87,10 +88,14 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
   // This function now calls setState only ONCE at the end
   Future<void> _loadOrders() async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+
+    if (!_hasLoadedOnce) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
     try {
       //
       // Load 'this_month' by default
@@ -115,6 +120,8 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _hasLoadedOnce = true;
+          _errorMessage = null;
         });
       }
     } catch (e) {
@@ -122,6 +129,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         setState(() {
           _errorMessage = e.toString();
           _isLoading = false;
+          _hasLoadedOnce = true;
         });
       }
     }
@@ -294,6 +302,53 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     }
   }
 
+  void _markOrderReady(int orderDbId) async {
+    try {
+      final success = await _apiService.updateOrderStatus(orderDbId, 'ready');
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Order marked as ready'),
+          backgroundColor: Colors.green,
+        ));
+        await _loadOrders();
+      } else {
+        throw Exception('Failed to mark order as ready');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: ${e.toString()}'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
+
+  void _markOrderPickedUp(int orderDbId) async {
+    try {
+      final success =
+          await _apiService.updateOrderStatus(orderDbId, 'picked_up');
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Order marked as picked up'),
+          backgroundColor: Colors.green,
+        ));
+        await _loadOrders();
+      } else {
+        throw Exception('Failed to mark order as picked up');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: ${e.toString()}'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
+
   void _viewInvoice(PendingOrder order) {
     final orderDetails = OrderDetails(
       orderId: order.orderId,
@@ -420,10 +475,56 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading && !_hasLoadedOnce) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text('Loading orders...',
+                  style: Theme.of(context).textTheme.bodyLarge),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_errorMessage != null && !_hasLoadedOnce) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline,
+                    size: 64, color: Theme.of(context).colorScheme.error),
+                const SizedBox(height: 16),
+                Text('Failed to load orders',
+                    style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 8),
+                Text(_errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                    onPressed: _loadOrders,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry')),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     // Split *filtered* online orders by status
-    final preparingOrders = _filteredOnlineOrders
-        .where(
-            (o) => o.status.toLowerCase() == 'open') // Requirement: 'open' only
+    final preparingOrders = _filteredOnlineOrders.where((o) {
+      final status = o.status.toLowerCase();
+      return status == 'open' || status == 'preparing';
+    }) // Requirement: 'open' only
         .toList();
 
     final readyOrders = _filteredOnlineOrders
@@ -486,8 +587,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
 
   Widget _buildBody(List<PendingOrder> preparingOrders,
       List<PendingOrder> readyOrders, List<PendingOrder> pickedUpOrders) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_errorMessage != null) {
+    if (_errorMessage != null && _hasLoadedOnce) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -497,7 +597,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
               Icon(Icons.error_outline,
                   size: 48, color: Theme.of(context).colorScheme.error),
               const SizedBox(height: 16),
-              Text('Failed to load orders',
+              Text('Failed to refresh orders',
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(_errorMessage!,
@@ -513,6 +613,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         ),
       );
     }
+
     return TabBarView(controller: _tabController, children: [
       RefreshIndicator(
         onRefresh: _loadOrders,
@@ -820,37 +921,47 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Total',
-                            style: textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withOpacity(0.6))),
-                        Text('₹${order.totalPrice.toStringAsFixed(2)}',
-                            style: textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Total',
+                                style: textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.6))),
+                            Text('₹${order.totalPrice.toStringAsFixed(2)}',
+                                style: textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        if (isPreparing || isReady)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                                color: _getStatusColor(status).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Row(children: [
+                              Icon(Icons.timer_outlined,
+                                  size: 18, color: _getStatusColor(status)),
+                              const SizedBox(width: 6),
+                              Text(_formatDuration(timerDuration),
+                                  style: textTheme.titleMedium?.copyWith(
+                                      color: _getStatusColor(status),
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.8)),
+                            ]),
+                          ),
                       ],
                     ),
-                    if (isPreparing || isReady) ...[
+                    if (order.paymentMethod.isNotEmpty) ...[
                       const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                            color: _getStatusColor(status).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Row(children: [
-                          Icon(Icons.timer_outlined,
-                              size: 18, color: _getStatusColor(status)),
-                          const SizedBox(width: 6),
-                          Text(_formatDuration(timerDuration),
-                              style: textTheme.titleMedium?.copyWith(
-                                  color: _getStatusColor(status),
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.8)),
-                        ]),
-                      ),
+                      Row(children: [
+                        _buildTag(order.paymentMethod, Colors.grey,
+                            isOutlined: true)
+                      ])
                     ],
                     const SizedBox(height: 12),
                     SizedBox(
@@ -865,42 +976,55 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
                 );
               }
               // Horizontal layout for larger screens
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Total',
-                          style: textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.6))),
-                      Text('₹${order.totalPrice.toStringAsFixed(2)}',
-                          style: textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Total',
+                              style: textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.6))),
+                          Text('₹${order.totalPrice.toStringAsFixed(2)}',
+                              style: textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      if (isPreparing || isReady)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                              color: _getStatusColor(status).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8)),
+                          child: Row(children: [
+                            Icon(Icons.timer_outlined,
+                                size: 18, color: _getStatusColor(status)),
+                            const SizedBox(width: 6),
+                            Text(_formatDuration(timerDuration),
+                                style: textTheme.titleMedium?.copyWith(
+                                    color: _getStatusColor(status),
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.8)),
+                          ]),
+                        ),
                     ],
                   ),
-                  if (isPreparing || isReady)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: _getStatusColor(status).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Row(children: [
-                        Icon(Icons.timer_outlined,
-                            size: 18, color: _getStatusColor(status)),
-                        const SizedBox(width: 6),
-                        Text(_formatDuration(timerDuration),
-                            style: textTheme.titleMedium?.copyWith(
-                                color: _getStatusColor(status),
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.8)),
-                      ]),
-                    ),
+                  if (order.paymentMethod.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      _buildTag(order.paymentMethod, Colors.grey,
+                          isOutlined: true)
+                    ])
+                  ],
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 8,
                     children: _buildActionButtons(order, isOnline: true),
                   ),
                 ],
@@ -925,27 +1049,25 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
     if (isOnline) {
       if (status == 'open') {
         buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.check_circle_outline, size: 18),
-              onPressed: () => _onOrderAction(order.id, 'ready'),
-              label: const Text('Mark Ready', overflow: TextOverflow.ellipsis, maxLines: 1),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            onPressed: () => _markOrderReady(order.id),
+            label: const Text('Mark Ready',
+                overflow: TextOverflow.ellipsis, maxLines: 1),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             ),
           ),
         );
       } else if (status == 'ready') {
         buttons.add(
-          Expanded(
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.local_shipping_outlined, size: 18),
-              onPressed: () => _onOrderAction(order.id, 'pickedup'),
-              label: const Text('Mark Picked Up', overflow: TextOverflow.ellipsis, maxLines: 1),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.local_shipping_outlined, size: 18),
+            onPressed: () => _markOrderPickedUp(order.id),
+            label: const Text('Mark Picked Up',
+                overflow: TextOverflow.ellipsis, maxLines: 1),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             ),
           ),
         );
@@ -957,11 +1079,10 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
         buttons.add(const SizedBox(width: 6));
       }
       buttons.add(
-        Expanded(
-          child: TextButton(
-            onPressed: () => _viewInvoice(order),
-            child: const Text('Invoice', overflow: TextOverflow.ellipsis, maxLines: 1),
-          ),
+        TextButton(
+          onPressed: () => _viewInvoice(order),
+          child: const Text('Invoice',
+              overflow: TextOverflow.ellipsis, maxLines: 1),
         ),
       );
     }

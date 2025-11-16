@@ -342,87 +342,54 @@ class ApiService {
     final url = Uri.parse('$_baseUrl/api/update-order-status/');
 
     try {
-      final response = await http
-          .post(
-            url,
-            headers: headers,
-            body: json.encode({
-              'id': orderDbId,
-              'status': action,
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        Map<String, dynamic> jsonResponse = json.decode(response.body);
-        return jsonResponse['success'] == true;
-      } else {
-        throw Exception('Update failed (${response.statusCode})');
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // ✅ FIXED: Get Analytics Data with better error handling
-  Future<AnalyticsData> getAnalyticsData(
-      {String? dateFilter,
-      String? paymentFilter,
-      String? startDate,
-      String? endDate}) async {
-    final headers = await _getAuthHeaders();
-
-    final queryParameters = {
-      'date_filter': dateFilter ?? 'this_month',
-      'payment_filter': paymentFilter ?? 'Total',
-    };
-
-    if (startDate != null &&
-        startDate.isNotEmpty &&
-        endDate != null &&
-        endDate.isNotEmpty) {
-      queryParameters['start_date'] = startDate;
-      queryParameters['end_date'] = endDate;
-    }
-
-    // ✅ CORRECT ENDPOINT: /api/analytics/
-    final url = Uri.parse('$_baseUrl/api/analytics/')
-        .replace(queryParameters: queryParameters);
-
-    try {
-      print("[v0] Fetching analytics from: $url");
-      print("[v0] Headers: $headers");
-
-      final response = await http
-          .get(url, headers: headers)
-          .timeout(const Duration(seconds: 20));
-
-      print("[v0] Analytics response status: ${response.statusCode}");
       print(
-          "[v0] Analytics response body: ${response.body.substring(0, min(500, response.body.length))}");
+          "[v0] Attempting updateOrderStatus for order: $orderDbId, action: $action");
+      print("[v0] Headers being sent: $headers");
 
-      if (response.statusCode == 200) {
-        try {
-          final jsonData = json.decode(response.body);
-          return AnalyticsData.fromJson(jsonData);
-        } catch (parseError) {
-          print("[v0] Error parsing analytics JSON: $parseError");
-          throw Exception('Failed to parse analytics data: $parseError');
+      final client = http.Client();
+      try {
+        final response = await client
+            .post(
+              url,
+              headers: headers,
+              body: json.encode({
+                'id': orderDbId,
+                'status': action,
+              }),
+            )
+            .timeout(const Duration(seconds: 15));
+
+        print("[v0] Update response status: ${response.statusCode}");
+        print("[v0] Update response body: ${response.body}");
+
+        _saveCookiesFromResponse(response);
+
+        if (response.statusCode == 302 || response.statusCode == 301) {
+          print("[v0] Received redirect - session likely expired");
+          await logout();
+          throw Exception('Session expired. Please login again.');
         }
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        await logout();
-        throw Exception('Authentication required. Session may have expired.');
-      } else {
-        throw Exception(
-            'Failed to load analytics (${response.statusCode}): ${response.body}');
+
+        if (response.statusCode == 200) {
+          Map<String, dynamic> jsonResponse = json.decode(response.body);
+          return jsonResponse['success'] == true;
+        } else {
+          throw Exception('Update failed (${response.statusCode})');
+        }
+      } finally {
+        client.close();
       }
+    } on TimeoutException catch (e) {
+      print("[v0] Timeout in updateOrderStatus: $e");
+      throw Exception(
+          'Request timeout - Please check your internet connection');
     } catch (e) {
-      print("[v0] Exception in getAnalyticsData: $e");
+      print("[v0] Exception in updateOrderStatus: $e");
       rethrow;
     }
   }
 
-  // ✅ FIXED: New method to fetch all orders with proper error handling
+  // --- Fetch Orders ---
   Future<List<PendingOrder>> getAllOrders({String? dateFilter}) async {
     final headers = await _getAuthHeaders();
 
@@ -657,9 +624,14 @@ class ApiService {
     // This endpoint comes from your urls.py
     final url = Uri.parse('$_baseUrl/api/handle-order-action/');
     final headers = await _getAuthHeaders();
+    final client = http.Client();
 
     try {
-      final response = await http
+      print(
+          "[v0] handleOrderAction called with orderDbId: $orderDbId, action: $action");
+      print("[v0] Headers: $headers");
+
+      final response = await client
           .post(
             url,
             headers: headers,
@@ -670,6 +642,18 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 15));
 
+      print("[v0] handleOrderAction response status: ${response.statusCode}");
+      print("[v0] handleOrderAction response body: ${response.body}");
+
+      _saveCookiesFromResponse(response);
+
+      if (response.statusCode == 302 || response.statusCode == 301) {
+        print(
+            "[v0] Received redirect (${response.statusCode}) - session expired");
+        await logout();
+        throw Exception('Session expired. Please login again.');
+      }
+
       if (response.statusCode == 200) {
         Map<String, dynamic> jsonResponse = json.decode(response.body);
         return jsonResponse['success'] == true;
@@ -677,12 +661,76 @@ class ApiService {
         print("[v0] handleOrderAction failed: ${response.body}");
         throw Exception('Update failed (${response.statusCode})');
       }
+    } on TimeoutException catch (e) {
+      print("[v0] Timeout in handleOrderAction: $e");
+      throw Exception(
+          'Request timeout - Please check your internet connection');
     } catch (e) {
       print("[v0] handleOrderAction error: $e");
       rethrow;
+    } finally {
+      client.close();
     }
   }
   // ===================================================================
+
+  // ✅ FIXED: Get Analytics Data with better error handling
+  Future<AnalyticsData> getAnalyticsData(
+      {String? dateFilter,
+      String? paymentFilter,
+      String? startDate,
+      String? endDate}) async {
+    final headers = await _getAuthHeaders();
+
+    final queryParameters = {
+      'date_filter': dateFilter ?? 'this_month',
+      'payment_filter': paymentFilter ?? 'Total',
+    };
+
+    if (startDate != null &&
+        startDate.isNotEmpty &&
+        endDate != null &&
+        endDate.isNotEmpty) {
+      queryParameters['start_date'] = startDate;
+      queryParameters['end_date'] = endDate;
+    }
+
+    // ✅ CORRECT ENDPOINT: /api/analytics/
+    final url = Uri.parse('$_baseUrl/api/analytics/')
+        .replace(queryParameters: queryParameters);
+
+    try {
+      print("[v0] Fetching analytics from: $url");
+      print("[v0] Headers: $headers");
+
+      final response = await http
+          .get(url, headers: headers)
+          .timeout(const Duration(seconds: 20));
+
+      print("[v0] Analytics response status: ${response.statusCode}");
+      print(
+          "[v0] Analytics response body: ${response.body.substring(0, min(500, response.body.length))}");
+
+      if (response.statusCode == 200) {
+        try {
+          final jsonData = json.decode(response.body);
+          return AnalyticsData.fromJson(jsonData);
+        } catch (parseError) {
+          print("[v0] Error parsing analytics JSON: $parseError");
+          throw Exception('Failed to parse analytics data: $parseError');
+        }
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        await logout();
+        throw Exception('Authentication required. Session may have expired.');
+      } else {
+        throw Exception(
+            'Failed to load analytics (${response.statusCode}): ${response.body}');
+      }
+    } catch (e) {
+      print("[v0] Exception in getAnalyticsData: $e");
+      rethrow;
+    }
+  }
 
   void dispose() {
     // Cleanup if needed

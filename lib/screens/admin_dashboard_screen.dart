@@ -178,20 +178,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 2.2, // Adjusted aspect ratio
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.2,
       ),
-      itemCount: dashboardItems.length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      itemCount: dashboardItems.length,
       itemBuilder: (context, index) {
         final item = dashboardItems[index];
-        return _buildDashboardItem(
+        return _buildStatCard(
+          context: context,
           title: item['title'],
           value: item['value'],
           icon: item['icon'],
           color: item['color'],
-          textTheme: textTheme,
           theme: theme,
           onTap: () {
             if (ModalRoute.of(context)?.settings.name != item['route']) {
@@ -261,12 +261,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildDashboardItem({
+  Widget _buildStatCard({
+    required BuildContext context,
     required String title,
     required String value,
     required IconData icon,
     required Color color,
-    required TextTheme textTheme,
     required ThemeData theme,
     required VoidCallback onTap,
   }) {
@@ -302,21 +302,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   children: [
                     Text(
                       title,
-                      style: textTheme.titleSmall?.copyWith(
-                        // Smaller title
-                        color: theme.colorScheme.onSurface.withOpacity(0.8),
-                      ),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            // Smaller title
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.8),
+                          ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4), // Reduced spacing
                     Text(
                       value,
-                      style: textTheme.titleLarge?.copyWith(
-                        // Adjusted from headlineSmall
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                      ),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            // Adjusted from headlineSmall
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
