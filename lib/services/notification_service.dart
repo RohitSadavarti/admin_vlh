@@ -70,7 +70,7 @@ class NotificationService {
   Future<void> _playNotificationRingtone() async {
     try {
       // Try to play from assets first
-      await _audioPlayer.play(AssetSource('sounds/notification.mp3'));
+      await _audioPlayer.play(AssetSource('sounds/ringtone.mp3'));
       print("✅ [Audio] Ringtone playing from assets");
     } catch (e) {
       print("⚠️ [Audio] Could not play asset sound: $e");

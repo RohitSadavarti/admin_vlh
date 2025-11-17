@@ -1031,12 +1031,6 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
               );
             },
           ),
-          if (order.paymentMethod.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(children: [
-              _buildTag(order.paymentMethod, Colors.grey, isOutlined: true)
-            ])
-          ],
         ]),
       ),
     );
