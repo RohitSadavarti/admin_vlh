@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "86193565341",
+    "project_id": "vanita-lunch-home",
+    "storage_bucket": "vanita-lunch-home.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:86193565341:android:fd6281cf57decec0366e74",
+        "android_client_info": {
+          "package_name": "com.example.admin_vlh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8Wdk1E2wXOoHnUPDHq2zeGvh9NlazTrw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -197,6 +197,22 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
             !orderDate.isBefore(startDate) && orderDate.isBefore(endDate);
 
         if (!matchesDate) return false;
+        final placedBy = order.orderPlacedBy?.toLowerCase() ?? '';
+        if (placedBy != 'customer') {
+          return false;
+        }
+
+        // 2. Check for only the active statuses you requested
+        // This will filter out 'open', 'rejected', and 'completed'
+        final status = order.status.toLowerCase();
+        final isActiveStatus = status == 'open' ||
+            status == 'preparing' ||
+            status == 'ready' ||
+            status == 'pickedup';
+
+        if (!isActiveStatus) {
+          return false;
+        }
 
         // Apply search filter
         if (_onlineSearchQuery.isEmpty) {
@@ -328,7 +344,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen>
   void _markOrderPickedUp(int orderDbId) async {
     try {
       final success =
-          await _apiService.updateOrderStatus(orderDbId, 'picked_up');
+          await _apiService.updateOrderStatus(orderDbId, 'pickedup');
       if (!mounted) return;
 
       if (success) {

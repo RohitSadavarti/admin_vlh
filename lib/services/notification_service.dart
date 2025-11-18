@@ -1,41 +1,52 @@
-// lib/services/notification_service.dart
+// In: lib/services/notification_service.dart
+
 import 'dart:convert';
 
 import 'package:admin_vlh/services/api_service.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:firebase_messaging/firebase_messaging.dart'; // Make sure this is imported
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
-import 'order_update_service.dart'; // <-- IMPORTED THE NEW SERVICE
+import 'order_update_service.dart';
 
 class NotificationService {
   final GlobalKey<NavigatorState> navigatorKey;
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPopupShowing = false;
+  String? _currentlyShowingPopupForOrderId; // <-- ADD THIS
 
   NotificationService({required this.navigatorKey});
 
   Future<void> initialize() async {
-    // 1. Request permission (especially for iOS)
     await FirebaseMessaging.instance.requestPermission();
-
-    // --- 2. ADD THIS FUNCTION CALL ---
     await subscribeToTopic();
-    // --------------------------------
 
-    // 3. Listen for messages when the app is OPEN
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      // --- ADD THIS PRINT STATEMENT FOR DEBUGGING ---
       print("🔔 [FCM] Message received: ${message.data}");
-      // ------------------------------------------------
 
-      final String orderSource = message.data['order_source'] ?? '';
+      // --- START OF MODIFIED LOGIC ---
+      final messageType = message.data['type'] as String?;
+      final orderSource = message.data['order_source'] as String?;
 
-      // --- ADD THIS PRINT STATEMENT FOR DEBUGGING ---
-      print("🔔 [FCM] Order Source: $orderSource");
-      // ------------------------------------------------
+      if (messageType == 'order_update') {
+        // This is a SYNC message from another device
+        print("🔔 [FCM] Received order_update sync message.");
+        final orderPk = message.data['order_pk'] as String?;
 
-      if (orderSource == 'customer' && !_isPopupShowing) {
+        // Check if we are currently showing a popup for this *exact* order
+        if (_isPopupShowing && _currentlyShowingPopupForOrderId == orderPk) {
+          final BuildContext? context = navigatorKey.currentContext;
+          // Check if the dialog can be popped
+          if (context != null && Navigator.of(context).canPop()) {
+            print("🔔 [FCM] Closing matching popup for order $orderPk");
+            Navigator.of(context).pop(); // This closes the dialog
+          }
+        }
+        // *Always* notify the app to refresh its lists, even if the popup wasn't open
+        OrderUpdateService().notifyOrderUpdated();
+      } else if (orderSource == 'customer' && !_isPopupShowing) {
+        // This is a NEW order notification
+        print("🔔 [FCM] Received new customer order.");
         final orderData = {
           'id': int.tryParse(message.data['id'] ?? '0') ?? 0,
           'order_id': message.data['order_id'] ?? 'N/A',
@@ -47,57 +58,39 @@ class NotificationService {
         };
         _showNewOrderPopup(orderData);
       }
+      // --- END OF MODIFIED LOGIC ---
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       print("🔔 [FCM] App opened from notification.");
-      // Here, you could navigate to the order screen,
-      // but the popup is more important for foreground.
+      // ...
     });
   }
 
-  // --- 4. ADD THIS NEW FUNCTION ---
   Future<void> subscribeToTopic() async {
-    try {
-      await FirebaseMessaging.instance.subscribeToTopic('new_orders');
-      print("✅ [FCM] Subscribed to 'new_orders' topic successfully.");
-    } catch (e) {
-      print("❌ [FCM] FAILED to subscribe to topic: $e");
-    }
+    // ... (no changes here)
   }
-  // --------------------------------
 
   Future<void> _playNotificationRingtone() async {
-    try {
-      // Try to play from assets first
-      await _audioPlayer.play(AssetSource('sounds/ringtone.mp3'));
-      print("✅ [Audio] Ringtone playing from assets");
-    } catch (e) {
-      print("⚠️ [Audio] Could not play asset sound: $e");
-      try {
-        // Fallback: Use system notification sound
-        await _audioPlayer.play(AssetSource('sounds/default_notification.wav'));
-        print("✅ [Audio] Playing fallback notification sound");
-      } catch (e2) {
-        print("❌ [Audio] Could not play any notification sound: $e2");
-      }
-    }
+    // ... (no changes here)
   }
 
-  // --- The Popup and Ringtone Logic ---
   void _showNewOrderPopup(Map<String, dynamic> orderData) {
     _isPopupShowing = true;
-
+    _currentlyShowingPopupForOrderId =
+        orderData['id'].toString(); // <-- ADD THIS
     _playNotificationRingtone();
 
     final BuildContext? context = navigatorKey.currentContext;
 
     if (context == null) {
       _isPopupShowing = false;
+      _currentlyShowingPopupForOrderId = null; // <-- ADD THIS
       return; // Cannot show dialog
     }
 
     String itemsText = "No items";
+    // ... (no changes to itemsText logic) ...
     try {
       final itemsJson = orderData['items_json'] ?? '[]';
       if (itemsJson.isNotEmpty && itemsJson != '[]') {
@@ -119,6 +112,7 @@ class NotificationService {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        // ... (no changes to title or content) ...
         title: const Row(
           children: [
             Icon(Icons.notifications_active, color: Colors.amber, size: 28),
@@ -171,7 +165,8 @@ class NotificationService {
                   onPressed: () async {
                     await _audioPlayer.stop();
                     Navigator.of(context).pop();
-                    _isPopupShowing = false;
+                    // _isPopupShowing = false; // <-- REMOVED (handled by .then)
+                    // _currentlyShowingPopupForOrderId = null; // <-- REMOVED (handled by .then)
 
                     try {
                       bool success =
@@ -179,9 +174,7 @@ class NotificationService {
                         orderData['id'] ?? 0, // Database ID
                         'reject',
                       );
-                      if (success) {
-                        OrderUpdateService().notifyOrderUpdated();
-                      }
+                      // No need to notify OrderUpdateService, the backend sync will do it
                     } catch (e) {
                       print("Error rejecting order: $e");
                     }
@@ -200,7 +193,8 @@ class NotificationService {
                   onPressed: () async {
                     await _audioPlayer.stop();
                     Navigator.of(context).pop();
-                    _isPopupShowing = false;
+                    // _isPopupShowing = false; // <-- REMOVED (handled by .then)
+                    // _currentlyShowingPopupForOrderId = null; // <-- REMOVED (handled by .then)
 
                     try {
                       bool success =
@@ -208,9 +202,7 @@ class NotificationService {
                         orderData['id'] ?? 0, // Database ID
                         'accept',
                       );
-                      if (success) {
-                        OrderUpdateService().notifyOrderUpdated();
-                      }
+                      // No need to notify OrderUpdateService, the backend sync will do it
                     } catch (e) {
                       print("Error accepting order: $e");
                     }
@@ -221,6 +213,13 @@ class NotificationService {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      // --- ADD THIS .then() BLOCK ---
+      // This executes when the dialog is popped,
+      // either by the buttons OR by our new sync logic.
+      _isPopupShowing = false;
+      _currentlyShowingPopupForOrderId = null;
+      print("🔔 Popup closed, resetting notification state.");
+    });
   }
 }
